@@ -133,7 +133,7 @@ def test_post_validation(conn):
         d, _ = deps(conn, llm, github_user="me")
         with pytest.raises(TaskError, match="Neispravno ime"):
             run_task(d, {"task": "post", "repo": bad})
-    d, _ = deps(conn, llm)
+    d, _ = deps(conn, llm, github_user="", github_repository_owner="")  # i bez owner-a iz Actions-a
     with pytest.raises(TaskError, match="GITHUB_USER"):
         run_task(d, {"task": "post", "repo": "radar"})
     assert valid_repo_name("praksa-radar") and valid_repo_name("a.b_c")
