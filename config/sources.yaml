@@ -1,0 +1,18 @@
+# Izvori podataka. Gmail labela `radar` se uključuje sama kad postoji GMAIL_REFRESH_TOKEN.
+# Pre dodavanja novog sajta proveri robots.txt i uslove korišćenja.
+sources:
+  - name: helloworld
+    type: helloworld
+    queries: [praksa, pripravnik, internship, trainee, student]
+
+  # Primer generičke career stranice (URL + CSS selektori), bez novog koda:
+  # - name: firma-x-karijera
+  #   type: html_generic
+  #   url: https://firma-x.example/karijera
+  #   item: ".job-card"      # jedna kartica oglasa
+  #   title: "h3"            # unutar kartice
+  #   link: "a"              # href; relativni linkovi se razrešavaju
+  #   text: ".desc"          # opciono
+  #   org: ".company"        # opciono
+  #   location: ".city"      # opciono
+  #   min_expected: 0        # za nadzor izvora (Faza 5)

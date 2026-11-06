@@ -1,0 +1,24 @@
+name = "praksa-radar"
+main = "src/index.ts"
+compatibility_date = "2026-10-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Cron: tracker podsetnici (jednom na sat). Watchdog dolazi u Fazi 5.
+[triggers]
+crons = ["0 * * * *"]
+
+# npx wrangler hyperdrive create praksa-radar --connection-string="<DATABASE_URL>"
+# pa nalepi dobijeni id ovde. Isti korisnik mora da je i onaj koji pokreće migracije
+# (migracija 0003 mu daje članstvo u ulogama agent_reader i agent_tracker).
+[[hyperdrive]]
+binding = "HYPERDRIVE"
+id = "REPLACE_WITH_HYPERDRIVE_ID"
+
+[vars]
+GITHUB_REPO = "" # npr. "korisnik/praksa-radar" (za /sad i rezervni kill switch)
+RERANK_MODEL = "claude-haiku-5-5"
+AGENT_MODEL = "claude-sonnet-5-5"
+
+# Tajne (npx wrangler secret put <IME>):
+#   TELEGRAM_BOT_TOKEN, TELEGRAM_SECRET_TOKEN, ALLOWED_CHAT_ID, ANTHROPIC_API_KEY,
+#   GITHUB_TOKEN (fine-grained PAT: Contents RW + Variables read), MCP_TOKEN

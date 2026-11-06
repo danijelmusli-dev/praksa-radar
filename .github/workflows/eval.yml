@@ -1,0 +1,29 @@
+name: eval
+
+# Eval filtera na PR koji menja prompt ili logiku rangiranja.
+# Pad preciznosti za više od 5 p.p. u odnosu na evals/baseline.json obara build.
+on:
+  pull_request:
+    paths:
+      - "radar/rerank.py"
+      - "radar/rank.py"
+      - "radar/llm.py"
+      - "radar/profile.py"
+      - "evals/**"
+
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --frozen
+      - name: Eval
+        if: hashFiles('evals/dataset.jsonl', 'evals/profile.json') != ''
+        run: uv run python -m evals.run --min-precision 0.7
+      - name: Nema eval skupa
+        if: hashFiles('evals/dataset.jsonl', 'evals/profile.json') == ''
+        run: echo "evals/dataset.jsonl ili evals/profile.json ne postoji; eval preskočen"

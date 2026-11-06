@@ -1,0 +1,9 @@
+{
+  "interesovanja": ["AI/ML", "embedded", "backend", "Python"],
+  "iskljuceno": ["čisti frontend", "senior", "sales"],
+  "lokacije": ["Beograd", "Novi Sad", "remote"],
+  "tipovi": ["praksa", "projekat", "radionica", "takmičenje"],
+  "nivo": "student završnih godina",
+  "jezici": ["srpski", "engleski"],
+  "prag_relevantnosti": 7
+}

@@ -1,0 +1,35 @@
+name: radar
+
+on:
+  schedule:
+    - cron: "0 6,13 * * *" # 07:00 i 14:00 po beogradskom zimskom vremenu (UTC+1)
+  workflow_dispatch:
+  repository_dispatch:
+    types: [run_radar] # Telegram /sad (Worker)
+
+concurrency:
+  group: radar
+  cancel-in-progress: false # nova runda čeka staru
+
+jobs:
+  radar:
+    # Cron radi tek kad u Settings -> Variables postaviš RADAR_ENABLED=true.
+    # Ručno pokretanje (workflow_dispatch) radi uvek.
+    if: github.event_name != 'schedule' || vars.RADAR_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      VOYAGE_API_KEY: ${{ secrets.VOYAGE_API_KEY }}
+      GMAIL_CLIENT_ID: ${{ secrets.GMAIL_CLIENT_ID }}
+      GMAIL_CLIENT_SECRET: ${{ secrets.GMAIL_CLIENT_SECRET }}
+      GMAIL_REFRESH_TOKEN: ${{ secrets.GMAIL_REFRESH_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --frozen
+      - run: uv run python -m radar.db migrate
+      - run: uv run python -m radar.pipeline

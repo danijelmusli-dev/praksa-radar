@@ -1,0 +1,5 @@
+{"title": "ML Intern", "org": "Firma X", "location": "Beograd", "text": "Tražimo studente završnih godina. Python, osnove ML-a. Rok za prijavu: 20.11.2026.", "relevant": true, "type": "praksa", "deadline": "2026-11-20"}
+{"title": "Embedded Weekend", "org": "Organizacija Y", "location": "Novi Sad", "text": "Radionica 22-23.11: Arduino i STM32, besplatno za studente.", "relevant": true, "type": "radionica"}
+{"title": "Senior Sales Manager", "org": "Firma Z", "location": "Beograd", "text": "Minimum 8 godina iskustva u prodaji.", "relevant": false, "type": "posao"}
+{"title": "Frontend Intern (React)", "org": "Firma W", "location": "Beograd", "text": "Čist frontend, React i CSS.", "relevant": false, "type": "praksa"}
+{"title": "Backend praksa (Python/Django)", "org": "Firma V", "location": "remote", "text": "Letnja praksa za studente. Prijave do 1. decembra 2026.", "relevant": true, "type": "praksa", "deadline": "2026-12-01"}
