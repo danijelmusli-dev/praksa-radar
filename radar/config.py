@@ -26,6 +26,16 @@ class Settings(BaseSettings):
     agents_enabled: str = "true"  # repo varijabla AGENTS_ENABLED; "false" gasi agente
     auto_analysis_max: int = 3  # automatska analiza za relevantnost >= 8, najviše po rundi
     task_payload: str = ""  # JSON iz repository_dispatch (python -m radar.tasks)
+    # Faza 5
+    instagram_access_token: str = ""  # Graph API (Business nalog + Meta app review)
+    instagram_user_id: str = ""  # ID mog Instagram Business naloga
+    healthcheck_url: str = ""  # healthchecks.io ping posle svake uspešne runde
+    worker_url: str = ""  # https://praksa-radar.<nalog>.workers.dev (međusobna provera)
+    github_repository: str = ""  # "korisnik/repo"; u Actions ga postavlja GitHub
+    gh_app_id: str = ""  # GitHub App (agent 1 i 2): samo contents + PR u ovom repou
+    gh_app_installation_id: str = ""
+    gh_app_private_key: str = ""  # PEM
+    stale_hours: int = 26  # runda starija od ovoga = sistem je stao
 
 
 @lru_cache

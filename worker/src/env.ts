@@ -13,6 +13,8 @@ export interface Env {
   MCP_TOKEN?: string;
   RERANK_MODEL?: string;
   AGENT_MODEL?: string;
+  WATCHDOG?: string; // "on" kad radi cron: javlja ako nema uspešne runde
+  STALE_HOURS?: string;
 }
 
 /** Sve što handleri trebaju; fetch i vreme se ubacuju radi testiranja. */

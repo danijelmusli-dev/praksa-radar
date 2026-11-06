@@ -4,6 +4,15 @@ sources:
   - name: helloworld
     type: helloworld
     queries: [praksa, pripravnik, internship, trainee, student]
+    min_expected: 100 # nedeljno; ispod toga je kvar čak i bez greške
+
+  # Instagram (zvanični Graph API; treba INSTAGRAM_ACCESS_TOKEN i INSTAGRAM_USER_ID).
+  # Najviše 30 različitih hashtagova u 7 dana; recent_media vraća samo poslednja 24 h.
+  # - name: instagram
+  #   type: instagram
+  #   hashtags: [praksasrbija, internshipserbia]
+  #   accounts: [ftn_org]        # javni business/creator nalozi (Business Discovery)
+  #   min_expected: 3            # nedeljno; ispod toga je kvar čak i bez greške
 
   # Primer generičke career stranice (URL + CSS selektori), bez novog koda:
   # - name: firma-x-karijera

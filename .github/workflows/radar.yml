@@ -31,6 +31,14 @@ jobs:
       GMAIL_CLIENT_ID: ${{ secrets.GMAIL_CLIENT_ID }}
       GMAIL_CLIENT_SECRET: ${{ secrets.GMAIL_CLIENT_SECRET }}
       GMAIL_REFRESH_TOKEN: ${{ secrets.GMAIL_REFRESH_TOKEN }}
+      INSTAGRAM_ACCESS_TOKEN: ${{ secrets.INSTAGRAM_ACCESS_TOKEN }}
+      INSTAGRAM_USER_ID: ${{ secrets.INSTAGRAM_USER_ID }}
+      # nadzor: ping spoljnom servisu, provera Worker-a, zadatak popravke kad izvor padne 3x
+      HEALTHCHECK_URL: ${{ secrets.HEALTHCHECK_URL }}
+      WORKER_URL: ${{ vars.WORKER_URL }}
+      GITHUB_TOKEN: ${{ github.token }}
+    permissions:
+      contents: write # repository_dispatch za zadatak popravke (agent 1)
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5

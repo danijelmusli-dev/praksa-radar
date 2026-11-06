@@ -87,6 +87,7 @@ def parse_helloworld(html: str, source: str = "helloworld") -> list[RawItem]:
 
 class HelloWorldSource(Source):
     name = "helloworld"
+    empty_is_failure = True  # lista oglasa nikad ne sme da bude prazna
 
     def __init__(self, client: PoliteClient, queries: list[str] | None = None):
         self._client = client

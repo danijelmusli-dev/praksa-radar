@@ -28,6 +28,7 @@ export async function dispatchRadar(ctx: Ctx): Promise<{ ok: boolean; message: s
 
 export type TaskPayload =
   | { task: "projects_sync" }
+  | { task: "post"; repo: string }
   | { task: "analyze"; id: number }
   | { task: "draft"; id: number; kind: "letter" | "message" };
 
@@ -61,4 +62,22 @@ export async function githubKillSwitchOn(ctx: Ctx): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+/** Agenti koji menjaju repo ili čitaju web (workflow `agents`, event "agent"). */
+export type AgentPayload = { task: "discover" } | { task: "add_source"; id: number };
+
+export async function dispatchAgent(
+  ctx: Ctx,
+  payload: AgentPayload,
+): Promise<{ ok: boolean; message: string }> {
+  if (!configured(ctx)) return { ok: false, message: "GITHUB_TOKEN ili GITHUB_REPO nije podešen" };
+  const res = await ctx.fetch(`https://api.github.com/repos/${ctx.env.GITHUB_REPO}/dispatches`, {
+    method: "POST",
+    headers: { ...headers(ctx), "content-type": "application/json" },
+    body: JSON.stringify({ event_type: "agent", client_payload: payload }),
+  });
+  return res.status === 204
+    ? { ok: true, message: "pokrenuto" }
+    : { ok: false, message: `GitHub je odbio zahtev (${res.status})` };
 }

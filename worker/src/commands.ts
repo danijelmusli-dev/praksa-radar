@@ -13,7 +13,7 @@ import { dispatchRadar } from "./github";
 import { agentsEnabled, setAgentsEnabled } from "./killswitch";
 import { formatProfile, getCurrentProfile, setThreshold, undoProfile } from "./profile";
 import { proposeAndAsk } from "./proposal";
-import { DRAFT_KINDS, startTask } from "./tasks";
+import { DRAFT_KINDS, REPO_RE, startAgent, startTask } from "./tasks";
 import { sendMessage } from "./telegram";
 
 export const HELP = `\
@@ -27,6 +27,8 @@ Praksa Radar. Komande:
 /analiza <id> — gap analiza oglasa (~1 min)
 /nacrt <id> pismo|poruka — nacrt prijave (~1 min; šalješ ti, ne bot)
 /projekti sync — osveži moje projekte sa GitHub-a
+/izvori traži — agent 2 traži nove izvore (predlozi stižu sa dugmićima)
+/post <repo> — nacrt LinkedIn posta o mom projektu (objavljujem ručno)
 /prijavio <id> — upiši prijavu
 /intervju <id> <YYYY-MM-DD> — intervju (podsetnik dan ranije)
 /tracker [status] — lista prijava
@@ -68,7 +70,8 @@ async function filterCommand(ctx: Ctx, chat: string, arg: string): Promise<void>
 
 async function sourcesCommand(ctx: Ctx, chat: string, arg: string): Promise<void> {
   if (arg.toLowerCase().startsWith("traži") || arg.toLowerCase().startsWith("trazi")) {
-    return sendMessage(ctx, chat, "Otkrivanje izvora (agent 2) stiže u Fazi 5.");
+    await startAgent(ctx, chat, { task: "discover" }, "Traženje novih izvora");
+    return;
   }
   const rows = await ctx.sql`
     select source,
@@ -201,8 +204,13 @@ export async function handleCommand(ctx: Ctx, chat: string, text: string): Promi
       await startTask(ctx, chat, { task: "projects_sync" }, "Sinhronizacija projekata");
       return;
     }
-    case "post":
-      return sendMessage(ctx, chat, "/post <repo> stiže u Fazi 5.");
+    case "post": {
+      if (!REPO_RE.test(arg) || arg === "." || arg === "..") {
+        return sendMessage(ctx, chat, "Koristi: /post <ime-repoa>");
+      }
+      await startTask(ctx, chat, { task: "post", repo: arg }, "Nacrt posta");
+      return;
+    }
     default:
       return sendMessage(ctx, chat, `Nepoznata komanda.\n\n${HELP}`);
   }

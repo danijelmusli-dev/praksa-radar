@@ -47,3 +47,25 @@ def fetch_readme(client: httpx.Client, full_name: str, token: str = "") -> tuple
     data = resp.json()
     text = base64.b64decode(data["content"]).decode("utf-8", "replace")
     return text, data["sha"]
+
+
+def dispatch_event(
+    settings, event_type: str, payload: dict, client: httpx.Client | None = None
+) -> bool:
+    """repository_dispatch iz Actions (GITHUB_TOKEN sa contents: write). Ne baca izuzetak."""
+    if not (settings.github_token and settings.github_repository):
+        return False
+    own = client is None
+    client = client or httpx.Client(timeout=20)
+    try:
+        resp = client.post(
+            f"{API}/repos/{settings.github_repository}/dispatches",
+            headers=_headers(settings.github_token),
+            json={"event_type": event_type, "client_payload": payload},
+        )
+        return resp.status_code == 204
+    except httpx.HTTPError:
+        return False
+    finally:
+        if own:
+            client.close()

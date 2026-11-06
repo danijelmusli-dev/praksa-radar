@@ -9,7 +9,7 @@ import json
 import logging
 import re
 from collections.abc import Callable
-from urllib.parse import urljoin
+from urllib.parse import urlsplit
 
 import anthropic
 import httpx
@@ -22,6 +22,7 @@ from radar.web import (
     UrlRejected,
     clean_html,
     extract_links,
+    fetch_following,
     reject_personal_query,
     validate_fetch_url,
 )
@@ -99,29 +100,21 @@ class WebTools:
         return validate_fetch_url(url, self.seen, **kwargs)
 
     def fetch_page(self, args: dict) -> dict:
-        url = self._validate(str(args.get("url", "")))
-        for _ in range(MAX_REDIRECTS + 1):
-            try:
-                resp = self._http.get(url, follow_redirects=False)
-            except httpx.HTTPStatusError as exc:
-                if not exc.response.is_redirect:
-                    raise
-                location = exc.response.headers.get("location", "")
-                url = self._validate(urljoin(url, location))  # i preusmerenje se proverava
-                self.seen.add(url)
-                continue
-            ctype = resp.headers.get("content-type", "")
-            if "html" not in ctype and "text" not in ctype:
-                raise UrlRejected(f"nepodržan tip sadržaja: {ctype[:40]}")
-            links = extract_links(resp.text, url)
-            self.seen.update(links)
-            self.seen.add(url)
-            return {
-                "url": url,
-                "text": clean_html(resp.text, MAX_PAGE_CHARS),
-                "links": links[:25],
-            }
-        raise UrlRejected("previše preusmerenja")
+        url, resp = fetch_following(self._http, str(args.get("url", "")), self._validate)
+        ctype = resp.headers.get("content-type", "")
+        if "html" not in ctype and "text" not in ctype:
+            raise UrlRejected(f"nepodržan tip sadržaja: {ctype[:40]}")
+        host = (urlsplit(url).hostname or "").removeprefix("www.")
+        # Samo linkovi istog sajta: link na tuđ domen je mamac, pa ne otključava taj host.
+        # Novi sajtovi se otvaraju isključivo preko rezultata pretrage.
+        links = [
+            link
+            for link in extract_links(resp.text, url)
+            if (urlsplit(link).hostname or "").removeprefix("www.") == host
+        ]
+        self.seen.update(links)
+        self.seen.add(url)
+        return {"url": url, "text": clean_html(resp.text, MAX_PAGE_CHARS), "links": links[:25]}
 
     def web_search(self, args: dict) -> dict:
         query = reject_personal_query(str(args.get("query", "")), self._owner_terms)

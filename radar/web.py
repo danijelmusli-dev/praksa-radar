@@ -7,8 +7,10 @@ Tekst sa stranica je podatak, ne naredba. Pre nego što uđe u prompt, stranica 
 import ipaddress
 import re
 import socket
+from collections.abc import Callable
 from urllib.parse import urljoin, urlsplit, urlunsplit
 
+import httpx
 from bs4 import BeautifulSoup, Comment
 
 MAX_PAGE_CHARS = 20_000
@@ -122,3 +124,46 @@ def reject_personal_query(query: str, owner_terms: list[str]) -> str:
     if len(query) > 200:
         raise UrlRejected("upit je predug")
     return query.strip()
+
+
+def fetch_following(http, url: str, validate: Callable[[str], str], max_redirects: int = 3):
+    """GET sa ručnim praćenjem preusmerenja; svaki hop prolazi validaciju (SSRF, host)."""
+    url = validate(url)
+    for _ in range(max_redirects + 1):
+        try:
+            resp = http.get(url, follow_redirects=False)
+        except httpx.HTTPStatusError as exc:
+            if not exc.response.is_redirect:
+                raise
+            url = validate(urljoin(url, exc.response.headers.get("location", "")))
+            continue
+        return url, resp
+    raise UrlRejected("previše preusmerenja")
+
+
+_KEEP_ATTRS = {"class", "id", "href", "role", "data-testid"}
+
+
+def skeleton_html(html: str, limit: int = MAX_PAGE_CHARS, text_limit: int = 80) -> str:
+    """Sanitizovan HTML za popravku selektora: struktura i klase ostaju, tekst se skraćuje,
+    skripte/komentari/skriveni elementi i sve ostale atribute nestaju."""
+    soup = BeautifulSoup(html, "lxml")
+    for comment in soup.find_all(string=lambda s: isinstance(s, Comment)):
+        comment.extract()
+    for tag in soup(_DROP_TAGS):
+        tag.decompose()
+    for tag in [t for t in soup.find_all(True) if _is_hidden(t)]:
+        tag.decompose()
+    for tag in soup.find_all(True):
+        tag.attrs = {
+            k: (" ".join(v) if isinstance(v, list) else str(v))[:120]
+            for k, v in tag.attrs.items()
+            if k in _KEEP_ATTRS
+        }
+    for node in soup.find_all(string=True):
+        text = re.sub(r"\s+", " ", _INVISIBLE.sub("", str(node))).strip()
+        if text:
+            node.replace_with(text[:text_limit])
+        else:
+            node.extract()
+    return str(soup.body or soup)[:limit]

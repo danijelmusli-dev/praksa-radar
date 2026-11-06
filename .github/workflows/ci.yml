@@ -4,7 +4,27 @@ on:
   push:
   pull_request:
 
+# CI nema pristup tajnama: testira i PR-ove agenata (agent/*) bez ijedne tajne.
+permissions:
+  contents: read
+
 jobs:
+  # PR agenta sme da menja samo adapter / selektore / fixture-e (bez novih paketa).
+  agent-guard:
+    if: github.event_name == 'pull_request' && startsWith(github.head_ref, 'agent/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --frozen
+      - name: Provera diff-a
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          HEAD_REF: ${{ github.head_ref }}
+        run: uv run python scripts/check_agent_diff.py "origin/${BASE_REF}" "${HEAD_REF}"
+
   test:
     runs-on: ubuntu-latest
     services:

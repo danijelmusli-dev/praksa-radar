@@ -18,6 +18,8 @@ id = "REPLACE_WITH_HYPERDRIVE_ID"
 GITHUB_REPO = "" # npr. "korisnik/praksa-radar" (za /sad i rezervni kill switch)
 RERANK_MODEL = "claude-haiku-5-5"
 AGENT_MODEL = "claude-sonnet-5-5"
+WATCHDOG = "off" # prebaci na "on" kad uključiš cron (RADAR_ENABLED=true): javlja ako nema runde 26 h
+STALE_HOURS = "26"
 
 # Tajne (npx wrangler secret put <IME>):
 #   TELEGRAM_BOT_TOKEN, TELEGRAM_SECRET_TOKEN, ALLOWED_CHAT_ID, ANTHROPIC_API_KEY,

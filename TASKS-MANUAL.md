@@ -145,23 +145,64 @@ Kod je gotov (migracija `0004`, `radar/tasks.py`, `radar/agents/`, workflow `tas
 
 ## G. Faza 5 — Širenje i nadzor
 
-- [ ] Meta app review odobren → Instagram token(i), business ID
-- [ ] **Brave Search API** ključ (ili Google PSE) za agenta 2; proveri aktuelne kvote
-- [ ] **healthchecks.io** nalog + check (period 26 h) → `HEALTHCHECK_URL` Secret; proveri free limite
-- [ ] **GitHub App** za agenta 1: dozvole samo contents + PR u ovom repou → app id, private key kao Secrets
-- [ ] Branch protection: zahtevaj PR review/check; **tvoj merge** za sve `agent/*` PR-ove
-- [ ] Anthropic: mesečni limit potrošnje kod provajdera (ako već nije)
-- [ ] **Test**: namerno pokvari selektor jednog izvora → posle 3 runde stiže upozorenje + agent otvara PR
-- [ ] **Test**: ugasi Actions cron → watchdog javlja posle 26 h
-- [ ] **Test**: `/stop` odmah zaustavlja agente
-- [ ] 30 dana rada bez intervencije (kriterijum uspeha)
+Kod je gotov (migracija `0005`, `radar/health.py`, `radar/sources/instagram.py`, `radar/agents/{repair,discovery,proposals,guard}.py`, workflow-i `agents`, `weekly`, `redteam`, CI guard). Ovo je sve što ostaje tebi.
+
+**Pre svega**
+- [ ] `uv run python -m radar.db migrate` na Supabase (primeni `0005`)
+- [ ] `cd worker && npx wrangler deploy` (novo: `/izvori traži`, `/post`, dugmići za predloge izvora, watchdog u cron-u)
+
+**Spoljni watchdog (healthchecks.io)**
+- [ ] Nalog na healthchecks.io (proveri aktuelne limite free nivoa) → novi check: period **1 dan**, grace **2 h** (upozori posle ~26 h bez pinga) → kopiraj ping URL
+- [ ] GitHub Secret `HEALTHCHECK_URL` = taj URL; poveži check sa Telegramom/mejlom
+- [ ] Repo varijabla `WORKER_URL` = `https://praksa-radar.<nalog>.workers.dev` (Actions proverava `/health` svake runde)
+- [ ] Kad uključiš cron (`RADAR_ENABLED=true`), u `worker/wrangler.toml` postavi `WATCHDOG = "on"` pa `npx wrangler deploy` (Worker javlja ako nema uspešne runde 26 h)
+- [ ] **Test**: ugasi workflow `radar` u Actions (Disable workflow) na ~27 h → stižu OBA upozorenja (healthchecks.io i Worker). Vrati ga
+
+**Instagram (Graph API)** — preskoči ako app review nije prošao; radar radi i bez njega
+- [ ] Meta app review odobren (Hashtag Search + Business Discovery, A3)
+- [ ] Secrets: `INSTAGRAM_ACCESS_TOKEN` (long-lived, važi ~60 dana: stavi podsetnik na 50 dana; kad istekne stiže ⚠ poruka) i `INSTAGRAM_USER_ID` (ID Business naloga)
+- [ ] U `config/sources.yaml` odkomentariši/dodaj blok `instagram` (hashtagovi i nalozi organizacija koje pratiš). **Najviše 30 različitih hashtagova u 7 dana**; `recent_media` vraća samo poslednja 24 h
+- [ ] Posle prve runde proveri `/izvori`; ako je Instagram uvek prazan, proveri tokene i dozvole
+
+**GitHub App za agente 1 i 2 (PR-ovi)**
+- [ ] GitHub → Settings → Developer settings → GitHub Apps → New: dozvole samo **Contents: Read & write** i **Pull requests: Read & write**; instaliraj **samo na ovaj repo**
+- [ ] Generiši private key (.pem). Secrets: `GH_APP_ID`, `GH_APP_INSTALLATION_ID` (broj iz URL-a instalacije), `GH_APP_PRIVATE_KEY` (ceo PEM)
+- [ ] Branch protection na `main`: obavezan PR i zeleni `ci` (uključujući `agent-guard`); **merge svih `agent/*` PR-ova radiš ti**
+- [ ] Settings → Actions → General → proveri da workflow-i imaju samo read dozvole po defaultu (App piše, ne GITHUB_TOKEN)
+
+**Otkrivanje izvora (agent 2)**
+- [ ] `BRAVE_API_KEY` Secret (proveri aktuelne kvote); bez njega agent 2 ne radi
+- [ ] `/izvori traži` → u narednih par minuta stižu predlozi sa dugmićima ✅ Dodaj / ❌ Odbaci. Pre ✅ **pročitaj uslove korišćenja sajta**; ✅ otvara PR koji ti mergeuješ
+- [ ] Opciono: teme za pretragu u `config/sources.yaml` pod `discovery: {topics: [...]}`
+
+**Nedeljni poslovi (`weekly` workflow, nedeljom 20:00)**
+- [ ] Secret `DUMP_PASSPHRASE` (jaka lozinka; **sačuvaj je u menadžeru lozinki**, bez nje se dump ne može otvoriti). Repo je javan, pa se dump šifruje pre otpremanja
+- [ ] Variable `PG_VERSION` ako Supabase baza nije PG 17 (`pg_dump` mora biti iste ili novije verzije)
+- [ ] **Test oporavka** (jednom): preuzmi artifact `db-dump`, `gpg -d praksa-radar-dump.sql.gz.gpg | gunzip | psql <prazna baza>` i proveri da se podaci vrate
+- [ ] Prva nedelja: stiže izveštaj zdravlja (izvori, runde, agenti) i uvid u tržište na Telegram
+- [ ] Keepalive: workflow ponovo uključuje cron-ove jednom nedeljno. **Proveri posle ~60 dana** da cron i dalje radi (GitHub-ova pravila se menjaju; ako se ugasi, uključi ga ručno u Actions)
+
+**Testovi (ručni, sa pravim servisima)**
+- [ ] **Circuit breaker**: u `config/sources.yaml` namerno pokvari selektor jednog `html_generic` izvora (ili ugasi mrežu) → posle 3 neuspele runde stiže ⛔ poruka, izvor se preskače 24 h, a agent 1 otvara PR (`agent/repair-…`). Proveri diff, mergeuj, pa vidi da izvor ponovo radi
+- [ ] **Revert**: namerno mergeuj lošu popravku → posle 2 runde sa 0 stavki agent otvara `agent/revert-…` PR (tražiće tvoje odobrenje)
+- [ ] **CI guard**: ručno otvori PR sa grane `agent/repair-test` koji menja `pyproject.toml` → `agent-guard` mora da pada
+- [ ] `/stop` odmah zaustavlja agente (i u toku rada: proverava se pre svakog koraka)
+- [ ] **Red-team**: Actions → `redteam` → Run workflow (pravi model, nekoliko centi). Mora biti **0 izvršenih instrukcija**; svaki promašaj obara build. Isto lokalno: `uv run python -m evals.redteam.run`
+- [ ] **Eval agenta 1**: `uv run python -m evals.repair_eval` (10 pokvarenih sajtova). Cilj ≥70% popravki koje prolaze; zapiši rezultat
+- [ ] **Eval agenta 2** (nije automatizovan): sakrij 20 poznatih dobrih izvora iz `sources.yaml`, pokreni `/izvori traži` 4 nedelje i izbroj koliko je pronađeno; prati udeo predloga koje prihvataš
+- [ ] **Eval agenta 3** (nije automatizovan): napiši „idealnu“ gap analizu za 10 oglasa i uporedi ocenom 1–5 + proveri činjenice o firmi
+- [ ] Anthropic: mesečni limit potrošnje je postavljen (agenti troše tokene; `/agenti` i nedeljni izveštaj pokazuju korake i tokene)
+- [ ] **30 dana rada bez ručne intervencije** (kriterijum uspeha Faze 5)
 
 ## H. Faza 6 — Dorada za CV
 
-- [ ] Proširi eval skup na **100** označenih oglasa; cilj ≥80% preciznosti
-- [ ] Snimi **demo GIF** iz Telegrama
-- [ ] Pregledaj README (dijagram, rezultati evala)
-- [ ] `/post <repo>` → pročitaj, doradi i **objavi ručno** na LinkedIn-u
+README sa dijagramom arhitekture je napisan ([README.md](README.md)). Ostalo je tvoje:
+
+- [ ] Proširi eval skup na **100** označenih oglasa (`python -m evals.export 100`), cilj preciznost ≥80%, pa upiši brojeve u tabelu „Rezultati“ u README-u (`python -m evals.run`)
+- [ ] Snimi **demo GIF** iz Telegrama (digest → 👍 → Analiza → Nacrt) i dodaj ga u README (`docs/demo.gif`)
+- [ ] U README-u zameni `<korisnik>` svojim GitHub nalogom i dodaj link na Telegram bota (opciono)
+- [ ] `/post praksa-radar` → pročitaj nacrt, doradi i **objavi ručno** na LinkedIn-u
+- [ ] Završni prolaz: sve kvačice iz ovog fajla, pa zapiši na CV jednu rečenicu: „Preciznost digesta X% na eval skupu od 100 oglasa; 30 dana rada bez intervencije“
 
 ---
 

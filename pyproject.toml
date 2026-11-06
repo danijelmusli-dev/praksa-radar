@@ -10,6 +10,7 @@ dependencies = [
     "psycopg[binary]>=3.3.8",
     "pydantic>=2.14.3",
     "pydantic-settings>=2.16.2",
+    "pyjwt[crypto]>=2.15.1",
     "pyyaml>=6.0.3",
 ]
 
@@ -29,3 +30,12 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP"]
+
+[tool.ruff.lint.per-file-ignores]
+"radar/agents/repair.py" = ["E501"] # dugački opisi alata i poruke
+"tests/test_repair.py" = ["E501"] # YAML/HTML fixture-i u linijama
+"tests/test_discovery.py" = ["E501"]
+"tests/test_redteam.py" = ["E501"]
+"evals/redteam/pages.py" = ["E501"]
+"evals/redteam/run.py" = ["E501"]
+"evals/repair_eval.py" = ["E501"]

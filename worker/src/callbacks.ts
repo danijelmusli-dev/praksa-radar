@@ -2,7 +2,7 @@ import { trackerAdd } from "./data";
 import type { Ctx } from "./env";
 import { resolvePending } from "./profile";
 import { proposeAndAsk } from "./proposal";
-import { startTask } from "./tasks";
+import { startAgent, startTask } from "./tasks";
 import { answerCallback, clearButtons, sendMessage, type TgUpdate } from "./telegram";
 
 const SIGNALS: Record<string, string> = { up: "up", down: "down", less: "less_like_this" };
@@ -54,6 +54,20 @@ export async function handleCallback(ctx: Ctx, update: TgUpdate): Promise<void> 
       if (q.message) await clearButtons(ctx, q.message.chat.id, q.message.message_id);
       await sendMessage(ctx, chat, texts[r.result]);
     }
+    return;
+  }
+
+  if (parts[0] === "sa" || parts[0] === "sr") {
+    // Predlog novog izvora (agent 2): potvrda pokreće PR, odbijanje ga zatvara.
+    const [row] = await ctx.sql`select status, name from source_proposals where id = ${id}`;
+    if (!row) return answerCallback(ctx, q.id, "Predlog ne postoji");
+    if (row.status !== "pending") return answerCallback(ctx, q.id, "Ovaj predlog je već obrađen");
+    const accept = parts[0] === "sa";
+    await ctx.sql`update source_proposals set status = ${accept ? "accepted" : "rejected"}, resolved_at = now()
+                  where id = ${id}`;
+    await answerCallback(ctx, q.id, accept ? "Dodajem izvor…" : "Odbačeno");
+    if (q.message) await clearButtons(ctx, q.message.chat.id, q.message.message_id);
+    if (accept) await startAgent(ctx, chat, { task: "add_source", id }, `Dodavanje izvora ${row.name}`);
     return;
   }
 

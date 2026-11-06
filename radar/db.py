@@ -29,6 +29,19 @@ def kv_set(conn: psycopg.Connection, key: str, value) -> None:
     conn.commit()
 
 
+class KvStore:
+    """kv_state kao jednostavno skladište (get/set) za izvore koji pamte stanje."""
+
+    def __init__(self, conn: psycopg.Connection):
+        self._conn = conn
+
+    def get(self, key: str):
+        return kv_get(self._conn, key)
+
+    def set(self, key: str, value) -> None:
+        kv_set(self._conn, key, value)
+
+
 def migrate(conn: psycopg.Connection, directory: Path = MIGRATIONS_DIR) -> list[str]:
     """Primeni migracije po redu; vrati imena novo primenjenih."""
     with conn.cursor() as cur:

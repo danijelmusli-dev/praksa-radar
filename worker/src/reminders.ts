@@ -1,4 +1,5 @@
 /** Tracker podsetnici: pravila iz spec-a + ručni (set_reminder). Poziva se iz cron-a Worker-a. */
+import { getKv, setKv } from "./data";
 import type { Ctx } from "./env";
 import { sendMessage } from "./telegram";
 
@@ -52,6 +53,31 @@ export async function sendDueReminders(ctx: Ctx, chatId: string): Promise<number
 }
 
 export async function runReminders(ctx: Ctx): Promise<number> {
+  await checkStale(ctx).catch((e) => console.error("watchdog", e));
   await scanTracker(ctx);
   return sendDueReminders(ctx, ctx.env.ALLOWED_CHAT_ID);
+}
+
+/**
+ * Watchdog: ako nema uspešne runde duže od STALE_HOURS, javi (jednom dnevno). Unutrašnji nadzor
+ * ne može da javi da je i sam stao, pa Worker (nezavisan od Actions) gleda `last_successful_run`.
+ * Uključuje se sa WATCHDOG=on tek kad radi cron (inače bi ručne runde stalno alarmirale).
+ */
+export async function checkStale(ctx: Ctx): Promise<boolean> {
+  if ((ctx.env.WATCHDOG ?? "off").toLowerCase() !== "on") return false;
+  const last = (await getKv(ctx.sql, "last_successful_run")) as string | null;
+  if (!last) return false;
+  const limit = Number(ctx.env.STALE_HOURS ?? 26);
+  const hours = (ctx.now().getTime() - Date.parse(last)) / 3_600_000;
+  if (!(hours >= limit)) return false;
+  const today = ctx.now().toISOString().slice(0, 10);
+  if ((await getKv(ctx.sql, "alert:stale")) === today) return false;
+  await setKv(ctx.sql, "alert:stale", today);
+  await sendMessage(
+    ctx,
+    ctx.env.ALLOWED_CHAT_ID,
+    `⚠ Nema uspešne runde već ${Math.floor(hours)} h (poslednja: ${last.slice(0, 16).replace("T", " ")}). ` +
+      "Proveri GitHub Actions (cron se gasi posle 60 dana neaktivnosti, nalog može biti blokiran).",
+  );
+  return true;
 }

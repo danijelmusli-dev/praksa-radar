@@ -12,6 +12,8 @@ log = logging.getLogger(__name__)
 
 class Source(ABC):
     name: str
+    empty_is_failure: bool = False  # prazna runda je kvar (liste oglasa), ne normalno stanje
+    min_expected: int = 0  # nedeljni očekivani minimum stavki (0 = bez provere)
 
     @abstractmethod
     def fetch(self, since: datetime) -> list[RawItem]:

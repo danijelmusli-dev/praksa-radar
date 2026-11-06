@@ -14,6 +14,7 @@ Agent 3 radi u dve izolovane faze:
 
 import json
 import logging
+import re
 import sys
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
@@ -23,16 +24,31 @@ from urllib.parse import urlsplit
 
 import anthropic
 import httpx
+import yaml
 from psycopg import Connection
 
 from radar.agents import writer
+from radar.agents.discovery import discover_sources
 from radar.agents.loop import record_run
+from radar.agents.proposals import add_source_pr, proposal_message, store_proposals
+from radar.agents.repair import repair_source, revert_repair
 from radar.agents.research import WebTools, research_company
 from radar.agents.writer import Analysis, strip_urls
 from radar.config import Settings, get_settings
 from radar.db import connect
 from radar.embed import Embedder, VoyageEmbedder, vec_literal
+from radar.github_api import fetch_readme
+from radar.health import build_report
 from radar.http import PoliteClient
+from radar.insights import (
+    MIN_ADS,
+    draft_post,
+    format_insights,
+    make_insights,
+    recent_commits,
+    valid_repo_name,
+    week_ads,
+)
 from radar.killswitch import agents_enabled
 from radar.llm import LLM, AnthropicLLM, LLMError
 from radar.models import Opportunity
@@ -40,6 +56,7 @@ from radar.notify import send_message
 from radar.profile import Profile, get_current_profile
 from radar.projects import sync_projects
 from radar.rerank import doc_text
+from radar.sources.registry import DEFAULT_CONFIG
 
 log = logging.getLogger("radar.tasks")
 
@@ -53,7 +70,7 @@ DRAFT_KINDS = {"letter": "cover_letter", "message": "message"}
 class Deps:
     conn: Connection
     settings: Settings
-    send: Callable[[str], None]
+    send: Callable[..., None]  # send(text) ili send(text, reply_markup=...)
     http: PoliteClient
     llm: LLM | None = None
     agent_client: anthropic.Anthropic | None = None
@@ -276,6 +293,57 @@ def task_projects_sync(deps: Deps) -> None:
     deps.send(report.text())
 
 
+def task_health(deps: Deps) -> None:
+    """Nedeljni izveštaj zdravlja (izvori, runde, agenti, breaker, ispod minimuma)."""
+    deps.send(build_report(deps.conn, datetime.now(UTC)).text())
+
+
+def task_insights(deps: Deps) -> None:
+    """Nedeljni uvid u tržište: top 5 veština, poređenje sa profilom, jedan predlog."""
+    if not agents_enabled(deps.conn, deps.settings):
+        deps.send("Agenti su isključeni (/pokreni ih uključuje).")
+        return
+    if deps.llm is None:
+        raise TaskError("ANTHROPIC_API_KEY nije podešen")
+    ads = week_ads(deps.conn)
+    if len(ads.ads) < MIN_ADS:
+        deps.send(f"Tržište ove nedelje: premalo oglasa za uvid ({len(ads.ads)}).")
+        return
+    stored = get_current_profile(deps.conn)
+    if stored is None:
+        raise TaskError("Profil još nije postavljen (python -m radar.cli set-profile)")
+    skills = [
+        s for (row,) in deps.conn.execute("select skills from my_projects").fetchall() for s in row
+    ]
+    ins = make_insights(
+        deps.llm, ads, stored.profile, sorted(set(skills)), deps.settings.draft_model
+    )
+    deps.send(format_insights(len(ads.ads), ins))
+
+
+def task_post(deps: Deps, repo: str) -> None:
+    """/post <repo>: nacrt LinkedIn posta iz README-a i poslednjih commitova. Objavljujem ručno."""
+    s = deps.settings
+    user = s.github_user or s.github_repository_owner
+    if not user:
+        raise TaskError("GITHUB_USER nije podešen")
+    if not valid_repo_name(repo):
+        raise TaskError("Neispravno ime repoa")
+    if not agents_enabled(deps.conn, s):
+        deps.send("Agenti su isključeni (/pokreni ih uključuje).")
+        return
+    if deps.llm is None or deps.gh is None:
+        raise TaskError("ANTHROPIC_API_KEY nije podešen")
+    readme = fetch_readme(deps.gh, f"{user}/{repo}", s.github_token)
+    if readme is None:
+        raise TaskError(f"Repo {repo} nema README (ili ne postoji)")
+    commits = recent_commits(deps.gh, f"{user}/{repo}", s.github_token)
+    text = draft_post(deps.llm, repo, readme[0], commits, s.draft_model)
+    deps.conn.execute("insert into drafts (kind, content) values ('post', %s)", (text,))
+    deps.conn.commit()
+    deps.send(f"Nacrt LinkedIn posta za {repo}\n\n{text}\n\nNišta nije objavljeno, objavljuješ ti.")
+
+
 def _int(v) -> int:
     n = int(v)
     if n <= 0:
@@ -283,19 +351,96 @@ def _int(v) -> int:
     return n
 
 
+SOURCE_NAME = re.compile(r"^[a-z0-9][a-z0-9_-]{0,39}$")
+REPO_ROOT = DEFAULT_CONFIG.parents[1]
+
+
+def task_discover(deps: Deps) -> None:
+    """Agent 2: traži nove izvore; svaki predlog proveren kodom i šalje se sa dugmićima."""
+    s = deps.settings
+    if not agents_enabled(deps.conn, s):
+        deps.send("Agenti su isključeni (/pokreni ih uključuje).")
+        return
+    if deps.agent_client is None:
+        raise TaskError("ANTHROPIC_API_KEY nije podešen")
+    if not s.brave_api_key:
+        raise TaskError("BRAVE_API_KEY nije podešen (potreban za otkrivanje izvora)")
+    cfg = yaml.safe_load(DEFAULT_CONFIG.read_text(encoding="utf-8")) or {}
+    topics = (cfg.get("discovery") or {}).get("topics")
+    web = WebTools(  # bez seed URL-ova: sajtove otključava tek pretraga
+        deps.http,
+        [],
+        brave_key=s.brave_api_key,
+        owner_terms=[t for t in s.owner_terms.split(",") if t.strip()],
+        resolve=deps.resolve,
+        search_client=deps.search_client,
+    )
+    verified, run, rejected = discover_sources(
+        deps.agent_client,
+        s.research_model,
+        web=web,
+        config_path=DEFAULT_CONFIG,
+        topics=topics,
+        enabled=lambda: agents_enabled(deps.conn, s),
+    )
+    record_run(deps.conn, "agent2-otkrivanje", run)
+    if run.anomalies:
+        deps.send(f"⚠ Anomalija u agentu 2: {'; '.join(run.anomalies)}")
+    if not verified:
+        why = f" Odbijeno: {'; '.join(rejected)}" if rejected else ""
+        deps.send(f"Agent 2: nijedan nov izvor nije prošao proveru ({run.outcome}).{why}"[:600])
+        return
+    for pid, (proposal, count) in zip(store_proposals(deps.conn, verified), verified, strict=True):
+        text, markup = proposal_message(pid, proposal, count)
+        deps.send(text, reply_markup=markup)
+
+
+def task_add_source(deps: Deps, pid: int) -> None:
+    add_source_pr(deps, pid, REPO_ROOT)
+
+
+def task_repair(deps: Deps, source: str) -> None:
+    repair_source(deps, source, REPO_ROOT)
+
+
+def task_revert(deps: Deps, source: str) -> None:
+    revert_repair(deps, source, REPO_ROOT)
+
+
+def _source(payload: dict) -> str:
+    name = str(payload.get("source", ""))
+    if not SOURCE_NAME.match(name):
+        raise ValueError
+    return name
+
+
 def run_task(deps: Deps, payload: dict) -> None:
-    """Payload dolazi iz repository_dispatch pa se strogo validira."""
+    """Payload dolazi iz repository_dispatch pa se parametri strogo validiraju (samo oni)."""
     task = payload.get("task")
     try:
-        if task == "projects_sync":
-            return task_projects_sync(deps)
-        if task == "analyze":
-            return task_analyze(deps, _int(payload.get("id")))
-        if task == "draft":
-            return task_draft(deps, _int(payload.get("id")), str(payload.get("kind")))
+        oid = _int(payload.get("id")) if task in ("analyze", "draft", "add_source") else 0
+        source = _source(payload) if task in ("repair", "revert") else ""
+        repo = str(payload.get("repo", ""))
+        kind = str(payload.get("kind"))
     except (TypeError, ValueError):
         raise TaskError(f"Neispravni parametri zadatka: {task}") from None
-    raise TaskError(f"Nepoznat zadatak: {task}")
+
+    handlers: dict[str, Callable[[], None]] = {
+        "projects_sync": lambda: task_projects_sync(deps),
+        "health": lambda: task_health(deps),
+        "insights": lambda: task_insights(deps),
+        "post": lambda: task_post(deps, repo),
+        "analyze": lambda: task_analyze(deps, oid),
+        "draft": lambda: task_draft(deps, oid, kind),
+        "discover": lambda: task_discover(deps),
+        "add_source": lambda: task_add_source(deps, oid),
+        "repair": lambda: task_repair(deps, source),
+        "revert": lambda: task_revert(deps, source),
+    }
+    handler = handlers.get(str(task))
+    if handler is None:
+        raise TaskError(f"Nepoznat zadatak: {task}")
+    handler()
 
 
 def auto_analyze(deps: Deps, run_id: str) -> int:

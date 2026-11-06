@@ -1,0 +1,87 @@
+name: agents
+
+# Agent 1 (samopopravka adaptera, revert) i agent 2 (otkrivanje izvora, dodavanje potvrđenog izvora).
+# Okidači: repository_dispatch "agent" (pipeline, Worker), nedeljno otkrivanje, ručno.
+# Agenti pišu SAMO na grane agent/* kroz GitHub App; merge radim ja.
+on:
+  repository_dispatch:
+    types: [agent]
+  schedule:
+    - cron: "0 7 * * 1" # ponedeljkom 08:00 (zimsko vreme): otkrivanje novih izvora
+  workflow_dispatch:
+    inputs:
+      task:
+        description: Zadatak
+        type: choice
+        options: [discover, repair, revert, add_source]
+        required: true
+      source:
+        description: Ime izvora (repair, revert)
+        required: false
+      id:
+        description: ID predloga (add_source)
+        required: false
+
+concurrency:
+  group: agents
+  cancel-in-progress: false
+
+permissions:
+  contents: read # GITHUB_TOKEN ne piše ništa; pisanje ide kroz GitHub App
+
+env:
+  # Nepoverljiv ulaz ide kroz env (ne kroz shell) i strogo se validira u radar.tasks.
+  TASK_PAYLOAD: "${{ github.event_name == 'repository_dispatch' && toJson(github.event.client_payload) || github.event_name == 'workflow_dispatch' && toJson(inputs) || '{\"task\": \"discover\"}' }}"
+
+jobs:
+  # Čita nepouzdan web, zato NEMA App tajne ni mogućnost pisanja u repo.
+  discover:
+    if: >-
+      (github.event_name != 'schedule' || vars.RADAR_ENABLED == 'true') &&
+      (github.event_name == 'schedule' ||
+       (github.event_name == 'repository_dispatch' && github.event.client_payload.task == 'discover') ||
+       (github.event_name == 'workflow_dispatch' && inputs.task == 'discover'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      BRAVE_API_KEY: ${{ secrets.BRAVE_API_KEY }}
+      OWNER_TERMS: ${{ secrets.OWNER_TERMS }}
+      AGENTS_ENABLED: ${{ vars.AGENTS_ENABLED }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --frozen
+      - run: uv run python -m radar.db migrate
+      - run: uv run python -m radar.tasks
+
+  # Menja kod/konfiguraciju kroz PR. Testovi agentovog koda rade u procesu bez tajni.
+  change:
+    if: >-
+      (github.event_name == 'repository_dispatch' && contains(fromJSON('["repair","revert","add_source"]'), github.event.client_payload.task)) ||
+      (github.event_name == 'workflow_dispatch' && contains(fromJSON('["repair","revert","add_source"]'), inputs.task))
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      GH_APP_ID: ${{ secrets.GH_APP_ID }}
+      GH_APP_INSTALLATION_ID: ${{ secrets.GH_APP_INSTALLATION_ID }}
+      GH_APP_PRIVATE_KEY: ${{ secrets.GH_APP_PRIVATE_KEY }}
+      AGENTS_ENABLED: ${{ vars.AGENTS_ENABLED }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # revert treba istoriju
+          persist-credentials: false # push ide kroz App token, ne kroz GITHUB_TOKEN
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --frozen
+      - run: uv run python -m radar.db migrate
+      - run: uv run python -m radar.tasks

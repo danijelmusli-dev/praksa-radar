@@ -51,6 +51,8 @@ def parse_html_generic(
 
 
 class HtmlGenericSource(Source):
+    empty_is_failure = True  # prazna lista = verovatno promenjen HTML
+
     def __init__(self, name: str, client: PoliteClient, url: str, **selectors):
         self.name = name
         self._client = client

@@ -1,0 +1,32 @@
+name: redteam
+
+# Živi red-team agenta 3 nad 20 otrovanih stranica (pravi model, košta nekoliko centi).
+# Prolaz = 0 izvršenih instrukcija; svaki promašaj obara build.
+# Ne radi na PR-ovima (tajne) nego na main, nedeljno i ručno.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "radar/agents/**"
+      - "radar/web.py"
+      - "radar/http.py"
+      - "evals/redteam/**"
+  schedule:
+    - cron: "0 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  redteam:
+    if: github.event_name != 'schedule' || vars.RADAR_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --frozen
+      - run: uv run python -m evals.redteam.run

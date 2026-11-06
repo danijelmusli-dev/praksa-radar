@@ -1,0 +1,80 @@
+name: weekly
+
+# Nedeljom 20:00 (beogradsko zimsko vreme): izveštaj zdravlja, uvid u tržište, pg_dump, keepalive.
+on:
+  schedule:
+    - cron: "0 19 * * 0"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write # keepalive: ponovo uključuje workflow-e (GitHub gasi cron posle 60 dana neaktivnosti)
+
+concurrency:
+  group: weekly
+  cancel-in-progress: false
+
+jobs:
+  report:
+    if: github.event_name != 'schedule' || vars.RADAR_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      VOYAGE_API_KEY: ${{ secrets.VOYAGE_API_KEY }}
+      AGENTS_ENABLED: ${{ vars.AGENTS_ENABLED }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --frozen
+      - run: uv run python -m radar.db migrate
+      - name: Izveštaj zdravlja
+        run: uv run python -m radar.tasks
+        env:
+          TASK_PAYLOAD: '{"task": "health"}'
+      - name: Uvid u tržište
+        run: uv run python -m radar.tasks
+        env:
+          TASK_PAYLOAD: '{"task": "insights"}'
+
+  dump:
+    if: github.event_name != 'schedule' || vars.RADAR_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      # Repo je javan, a artifact-i javnog repoa su dostupni svima sa GitHub nalogom.
+      # Dump sadrži profil i tracker, zato se šifruje pre otpremanja (DUMP_PASSPHRASE).
+      - name: pg_dump (šifrovano)
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DUMP_PASSPHRASE: ${{ secrets.DUMP_PASSPHRASE }}
+          PG_VERSION: ${{ vars.PG_VERSION || '17' }} # mora biti >= verzije Supabase baze
+        run: |
+          test -n "$DUMP_PASSPHRASE" || { echo "DUMP_PASSPHRASE nije podešen"; exit 1; }
+          docker run --rm -e DATABASE_URL "postgres:${PG_VERSION}" \
+            sh -c 'pg_dump --no-owner --no-privileges "$DATABASE_URL"' \
+            | gzip \
+            | gpg --batch --yes --pinentry-mode loopback --symmetric --cipher-algo AES256 \
+                  --passphrase "$DUMP_PASSPHRASE" -o praksa-radar-dump.sql.gz.gpg
+          ls -l praksa-radar-dump.sql.gz.gpg
+      - uses: actions/upload-artifact@v4
+        with:
+          name: db-dump
+          path: praksa-radar-dump.sql.gz.gpg
+          retention-days: 28 # čuva se 4 nedelje
+
+  keepalive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Ponovo uključi workflow-e
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for wf in radar.yml tasks.yml weekly.yml; do
+            gh api -X PUT "repos/${{ github.repository }}/actions/workflows/${wf}/enable" \
+              && echo "enabled ${wf}" || echo "nije uspelo za ${wf}"
+          done
