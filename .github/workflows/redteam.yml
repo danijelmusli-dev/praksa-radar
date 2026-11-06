@@ -28,5 +28,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
-      - run: uv sync --frozen
-      - run: uv run python -m evals.redteam.run
+      - name: Red-team (preskače se bez ANTHROPIC_API_KEY)
+        run: |
+          if [ -z "$ANTHROPIC_API_KEY" ]; then echo "ANTHROPIC_API_KEY nije podešen, red-team preskočen"; exit 0; fi
+          uv sync --frozen
+          uv run python -m evals.redteam.run
