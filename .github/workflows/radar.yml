@@ -24,6 +24,10 @@ jobs:
       TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       VOYAGE_API_KEY: ${{ secrets.VOYAGE_API_KEY }}
+      # za automatsku analizu stavki sa relevantnošću 8+ (agent 3)
+      BRAVE_API_KEY: ${{ secrets.BRAVE_API_KEY }}
+      OWNER_TERMS: ${{ secrets.OWNER_TERMS }}
+      AGENTS_ENABLED: ${{ vars.AGENTS_ENABLED }}
       GMAIL_CLIENT_ID: ${{ secrets.GMAIL_CLIENT_ID }}
       GMAIL_CLIENT_SECRET: ${{ secrets.GMAIL_CLIENT_SECRET }}
       GMAIL_REFRESH_TOKEN: ${{ secrets.GMAIL_REFRESH_TOKEN }}

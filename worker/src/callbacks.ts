@@ -2,6 +2,7 @@ import { trackerAdd } from "./data";
 import type { Ctx } from "./env";
 import { resolvePending } from "./profile";
 import { proposeAndAsk } from "./proposal";
+import { startTask } from "./tasks";
 import { answerCallback, clearButtons, sendMessage, type TgUpdate } from "./telegram";
 
 const SIGNALS: Record<string, string> = { up: "up", down: "down", less: "less_like_this" };
@@ -53,6 +54,33 @@ export async function handleCallback(ctx: Ctx, update: TgUpdate): Promise<void> 
       if (q.message) await clearButtons(ctx, q.message.chat.id, q.message.message_id);
       await sendMessage(ctx, chat, texts[r.result]);
     }
+    return;
+  }
+
+  if (parts[0] === "an") {
+    await answerCallback(ctx, q.id, "Pokrećem analizu…");
+    await startTask(ctx, chat, { task: "analyze", id }, "Analiza");
+    return;
+  }
+
+  if (parts[0] === "nc") {
+    await answerCallback(ctx, q.id, "Koji nacrt?");
+    await sendMessage(ctx, chat, `Nacrt za #${id}: šta da napišem?`, {
+      inline_keyboard: [
+        [
+          { text: "Motivaciono pismo", callback_data: `dr:l:${id}` },
+          { text: "Poruka recruiteru", callback_data: `dr:m:${id}` },
+        ],
+      ],
+    });
+    return;
+  }
+
+  if (parts[0] === "dr" && (parts[1] === "l" || parts[1] === "m")) {
+    await answerCallback(ctx, q.id, "Pišem nacrt…");
+    if (q.message) await clearButtons(ctx, q.message.chat.id, q.message.message_id);
+    const kind = parts[1] === "l" ? "letter" : "message";
+    await startTask(ctx, chat, { task: "draft", id, kind }, "Nacrt");
     return;
   }
 

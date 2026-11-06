@@ -1,0 +1,47 @@
+name: tasks
+
+# Teški zadaci iz Telegrama: /projekti sync, analiza, nacrti.
+# Worker šalje repository_dispatch (event "task"), rezultat stiže na Telegram.
+on:
+  repository_dispatch:
+    types: [task]
+  workflow_dispatch:
+    inputs:
+      task:
+        description: Zadatak
+        type: choice
+        options: [projects_sync, analyze, draft]
+        required: true
+      id:
+        description: ID oglasa (analyze, draft)
+        required: false
+      kind:
+        description: letter ili message (draft)
+        required: false
+
+concurrency:
+  group: tasks
+  cancel-in-progress: false
+
+jobs:
+  task:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      VOYAGE_API_KEY: ${{ secrets.VOYAGE_API_KEY }}
+      BRAVE_API_KEY: ${{ secrets.BRAVE_API_KEY }}
+      OWNER_TERMS: ${{ secrets.OWNER_TERMS }}
+      GITHUB_TOKEN: ${{ github.token }}
+      AGENTS_ENABLED: ${{ vars.AGENTS_ENABLED }}
+      # Nepoverljiv ulaz ide kroz env (ne kroz shell) i strogo se validira u radar.tasks.
+      TASK_PAYLOAD: ${{ github.event_name == 'repository_dispatch' && toJson(github.event.client_payload) || toJson(inputs) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --frozen
+      - run: uv run python -m radar.db migrate
+      - run: uv run python -m radar.tasks

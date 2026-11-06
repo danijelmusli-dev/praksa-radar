@@ -117,16 +117,31 @@ Kod je gotov (`worker/`, migracija `0003`). Ovo je sve što ostaje tebi, redom:
 - [ ] Opciono, MCP: u Claude Desktop/Code dodaj remote MCP server `https://…workers.dev/mcp` sa zaglavljem `Authorization: Bearer <MCP_TOKEN>` i probaj „koje prakse imam sačuvane?“
 
 **Eval asistenta** (kriterijum Faze 3: „asistent tačno odgovara na eval pitanja“)
-- [ ] Napiši **25 pitanja** sa očekivanim alatom i odgovorom (ja predložim listu, ti potvrdiš). Skripta za pokretanje nad pravim modelom još nije napisana, pa se ovo radi posle Faze 3 (javi mi)
+- [ ] Pregledaj 25 pitanja u `worker/evals/assistant.cases.json` (očekivani alat, parametri i odgovor); promeni šta ti ne odgovara
+- [ ] Pokreni nad pravim modelom (košta nekoliko centi): `cd worker && ANTHROPIC_API_KEY=… TEST_DATABASE_URL=postgresql://… npm run eval:assistant`, ili Actions → `eval-assistant` → Run workflow. Cilj: tačnost alata ≥90%, odgovora ≥80%. Rezultat je u `worker/evals/last-run.json`; promašaji se ispisuju
 - [ ] Anthropic: proveri potrošnju posle prvih dana (asistent koristi Sonnet; budžet je 60.000 tokena po pitanju, max 15 koraka)
 
-## F. Faza 4 — Helper
+## F. Faza 4 — Helper (projekti, analiza, nacrti)
 
-- [ ] GitHub **fine-grained PAT**: samo ovaj repo, `contents: write` (za `repository_dispatch`) → Secret u Worker-u
-- [ ] Moji javni repoi treba da imaju README (za `/projekti sync`)
-- [ ] **Test**: `/projekti sync` puni `my_projects`
-- [ ] **Test**: dugme „Nacrt“ → tekst u Telegramu za < 2 min
-- [ ] Oceni **10 nacrta** ocenom 1–5 (tačnost, konkretnost, ton); cilj prosek ≥4
+Kod je gotov (migracija `0004`, `radar/tasks.py`, `radar/agents/`, workflow `tasks`).
+
+**Podešavanje**
+- [ ] `uv run python -m radar.db migrate` na Supabase (primeni `0004`)
+- [ ] GitHub Secrets (pored postojećih): `OWNER_TERMS` (zarezom odvojeno: tvoje ime, mejl, grad... Upiti za pretragu koji ih sadrže se odbijaju; može i prazno) i, opciono, `BRAVE_API_KEY` ([Brave Search API](https://brave.com/search/api/), proveri aktuelne kvote). Bez Brave ključa istraživanje čita samo stranicu oglasa i linkove sa nje
+- [ ] Worker koristi isti `GITHUB_TOKEN` (PAT iz faze E) za `repository_dispatch` događaj `task`. Proveri da ima **Contents: Read and write** (potreban i za `/sad`); posle promene `cd worker && npx wrangler deploy`
+- [ ] Moji javni repoi treba da imaju README; `GITHUB_USER` nije potreban u Actions (koristi vlasnika repoa)
+
+**Testovi (ručni, sa pravim servisima)**
+- [ ] `/projekti sync` → za ~1 min poruka „Projekti: N novih…“; u Supabase `my_projects` ima redove sa `summary`, `skills`, `embedding`. Proveri da li su opisi i veštine tačni (nije izmišljeno)
+- [ ] Dugme **Analiza** ispod stavke → analiza sa pokrivenošću (npr. 4/6), ✅/❌ po zahtevima, „Fali ti“ i jednim predlogom. Proveri da su činjenice o firmi stvarne
+- [ ] Dugme **Nacrt** → izaberi pismo ili poruku → nacrt na jeziku oglasa (pismo ≤250 reči, poruka ≤80). **Od klika do teksta < 2 min** (kriterijum Faze 4); javi ako je sporije pa gledamo gde se gubi vreme
+- [ ] Nacrt nikad nije poslat nikome; pročitaj ga, doteraj i pošalji sam
+- [ ] `/nacrt <id> pismo`, `/nacrt <id> poruka`, `/analiza <id>` rade i kao komande
+- [ ] Posle runde sa stavkama 8+ stiže automatska analiza (najviše 3 po rundi; `AUTO_ANALYSIS_MAX=0` je isključuje)
+- [ ] `/stop` pa pokušaj Analiza → „Agenti su isključeni“; `/pokreni` vraća
+- [ ] `/agenti` prikazuje pokretanja `agent3-istrazivanje`; proveri korake i tokene; anomalije (>10 koraka, odbijen alat) stižu kao ⚠ poruka
+- [ ] Oceni **10 nacrta** ocenom 1–5 po rubrici: tačnost (ništa izmišljeno), konkretnost (pominje prave projekte), ton. Cilj: prosek ≥4. Ako je niže, doteramo prompt u `radar/agents/writer.py`
+- [ ] Iz Supabase (`drafts`) možeš da vidiš sve nacrte i analize; `company_notes` su beleške o firmama
 
 ## G. Faza 5 — Širenje i nadzor
 

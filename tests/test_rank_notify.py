@@ -146,19 +146,24 @@ def test_digest_buttons_use_item_numbers_and_ids():
     items = [item(11), item(12, type="radionica", relevance=7)]
     [msg] = build_digest(items, NOW)
     rows = msg.reply_markup["inline_keyboard"]
-    assert [r[0]["text"] for r in rows] == ["1 👍", "2 👍"]
-    assert [b["callback_data"] for b in rows[0]] == [
+    assert len(rows) == 4  # dva reda po stavci
+    assert [r[0]["text"] for r in rows] == ["1 👍", "1 💾", "2 👍", "2 💾"]
+    assert [b["callback_data"] for r in rows[:2] for b in r] == [
         "fb:up:11",
         "fb:down:11",
         "fb:less:11",
         "sv:11",
+        "an:11",
+        "nc:11",
     ]
-    assert rows[1][3]["callback_data"] == "sv:12"
+    assert rows[3][2]["callback_data"] == "nc:12"
     assert all(len(b["callback_data"].encode()) <= 64 for r in rows for b in r)
 
 
 def test_split_messages_keep_global_numbering_and_own_buttons():
     msgs = build_digest([item(i, reason="x" * 300) for i in range(30)], NOW)
-    nums = [int(r[0]["text"].split()[0]) for m in msgs for r in m.reply_markup["inline_keyboard"]]
-    assert nums == list(range(1, 31))
-    assert [len(m.reply_markup["inline_keyboard"]) for m in msgs] == [len(m.ids) for m in msgs]
+    first_rows = [
+        int(r[0]["text"].split()[0]) for m in msgs for r in m.reply_markup["inline_keyboard"][::2]
+    ]
+    assert first_rows == list(range(1, 31))
+    assert [len(m.reply_markup["inline_keyboard"]) for m in msgs] == [2 * len(m.ids) for m in msgs]

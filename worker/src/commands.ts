@@ -13,6 +13,7 @@ import { dispatchRadar } from "./github";
 import { agentsEnabled, setAgentsEnabled } from "./killswitch";
 import { formatProfile, getCurrentProfile, setThreshold, undoProfile } from "./profile";
 import { proposeAndAsk } from "./proposal";
+import { DRAFT_KINDS, startTask } from "./tasks";
 import { sendMessage } from "./telegram";
 
 export const HELP = `\
@@ -23,6 +24,9 @@ Praksa Radar. Komande:
 /prag <0-10> — prag relevantnosti
 /izvori — status izvora
 /sad — pokreni rundu odmah
+/analiza <id> — gap analiza oglasa (~1 min)
+/nacrt <id> pismo|poruka — nacrt prijave (~1 min; šalješ ti, ne bot)
+/projekti sync — osveži moje projekte sa GitHub-a
 /prijavio <id> — upiši prijavu
 /intervju <id> <YYYY-MM-DD> — intervju (podsetnik dan ranije)
 /tracker [status] — lista prijava
@@ -178,11 +182,27 @@ export async function handleCommand(ctx: Ctx, chat: string, text: string): Promi
       return trackerCommand(ctx, chat, arg);
     case "agenti":
       return agentsCommand(ctx, chat);
-    case "nacrt":
-      return sendMessage(ctx, chat, "Nacrti prijava stižu u Fazi 4.");
+    case "analiza": {
+      const id = needId(arg);
+      if (!id) return sendMessage(ctx, chat, "Koristi: /analiza <id>");
+      await startTask(ctx, chat, { task: "analyze", id }, "Analiza");
+      return;
+    }
+    case "nacrt": {
+      const [rawId, rawKind] = arg.split(/\s+/);
+      const id = needId(rawId ?? "");
+      const kind = DRAFT_KINDS[(rawKind ?? "").toLowerCase()];
+      if (!id || !kind) return sendMessage(ctx, chat, "Koristi: /nacrt <id> pismo|poruka");
+      await startTask(ctx, chat, { task: "draft", id, kind }, "Nacrt");
+      return;
+    }
+    case "projekti": {
+      if (arg.toLowerCase() !== "sync") return sendMessage(ctx, chat, "Koristi: /projekti sync");
+      await startTask(ctx, chat, { task: "projects_sync" }, "Sinhronizacija projekata");
+      return;
+    }
     case "post":
-    case "projekti":
-      return sendMessage(ctx, chat, "Ta komanda stiže u kasnijoj fazi (4–5).");
+      return sendMessage(ctx, chat, "/post <repo> stiže u Fazi 5.");
     default:
       return sendMessage(ctx, chat, `Nepoznata komanda.\n\n${HELP}`);
   }

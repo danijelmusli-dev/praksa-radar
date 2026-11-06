@@ -88,3 +88,69 @@ class HashEmbedder:
             norm = sum(x * x for x in v) ** 0.5 or 1.0
             out.append([x / norm for x in v])
         return out
+
+
+# ---- lažni Anthropic klijent (tool use) i LLM po šemi ---------------------------------------
+
+from types import SimpleNamespace  # noqa: E402
+
+
+def _usage(i, o):
+    return SimpleNamespace(input_tokens=i, output_tokens=o)
+
+
+def text_resp(text, tokens=(100, 50)):
+    return SimpleNamespace(
+        content=[SimpleNamespace(type="text", text=text)],
+        stop_reason="end_turn",
+        usage=_usage(*tokens),
+    )
+
+
+def tool_resp(name, args=None, id="t1", tokens=(100, 50)):
+    return SimpleNamespace(
+        content=[SimpleNamespace(type="tool_use", id=id, name=name, input=args or {})],
+        stop_reason="tool_use",
+        usage=_usage(*tokens),
+    )
+
+
+class ScriptedAnthropic:
+    """Zamena za anthropic.Anthropic: messages.create vraća unapred pripremljene odgovore."""
+
+    def __init__(self, *replies):
+        self.replies = list(replies)
+        self.calls: list[dict] = []
+        self.messages = SimpleNamespace(create=self._create)
+
+    def _create(self, **kwargs):
+        # snimak poruka u trenutku poziva (lista se kasnije menja)
+        self.calls.append({**kwargs, "messages": list(kwargs["messages"])})
+        reply = self.replies.pop(0)
+        if isinstance(reply, Exception):
+            raise reply
+        return reply
+
+    def observations(self, call_index):
+        """Tekst svih tool_result blokova poslatih modelu u pozivu `call_index`."""
+        out = []
+        for m in self.calls[call_index]["messages"]:
+            if m["role"] == "user" and isinstance(m["content"], list):
+                out += [b["content"] for b in m["content"] if b.get("type") == "tool_result"]
+        return "\n".join(out)
+
+
+class SchemaLLM:
+    """LLM koji odgovara po imenu šeme: {"Analysis": {...}, "LetterOut": fn|dict|Exception}."""
+
+    def __init__(self, by_schema):
+        self.by = by_schema
+        self.calls: list[tuple[str, str, str, str | None]] = []
+
+    def complete_json(self, *, system, user, schema, model=None):
+        self.calls.append((schema.__name__, system, user, model))
+        r = self.by[schema.__name__]
+        r = r(user) if callable(r) else r
+        if isinstance(r, Exception):
+            raise r
+        return schema(**r)

@@ -66,13 +66,21 @@ class Message:
     reply_markup: dict | None = None  # inline dugmići ispod stavki (Worker ih obrađuje)
 
 
-def item_buttons(n: int, opportunity_id: int) -> list[dict]:
-    """Red dugmića za stavku broj n. callback_data: fb:<signal>:<id> i sv:<id> (max 64 bajta)."""
+def item_buttons(n: int, opportunity_id: int) -> list[list[dict]]:
+    """Dva reda dugmića za stavku broj n. callback_data (max 64 bajta):
+    fb:<up|down|less>:<id>, sv:<id>, an:<id> (analiza), nc:<id> (nacrt)."""
+    i = opportunity_id
     return [
-        {"text": f"{n} 👍", "callback_data": f"fb:up:{opportunity_id}"},
-        {"text": f"{n} 👎", "callback_data": f"fb:down:{opportunity_id}"},
-        {"text": f"{n} Manje", "callback_data": f"fb:less:{opportunity_id}"},
-        {"text": f"{n} 💾", "callback_data": f"sv:{opportunity_id}"},
+        [
+            {"text": f"{n} 👍", "callback_data": f"fb:up:{i}"},
+            {"text": f"{n} 👎", "callback_data": f"fb:down:{i}"},
+            {"text": f"{n} Manje", "callback_data": f"fb:less:{i}"},
+        ],
+        [
+            {"text": f"{n} 💾", "callback_data": f"sv:{i}"},
+            {"text": f"{n} Analiza", "callback_data": f"an:{i}"},
+            {"text": f"{n} Nacrt", "callback_data": f"nc:{i}"},
+        ],
     ]
 
 
@@ -137,7 +145,7 @@ def build_digest(
                 block = label + "\n" + body
             text += block
             ids.append(item.id)
-            rows.append(item_buttons(number, item.id))
+            rows.extend(item_buttons(number, item.id))
             first_in_message = False
 
     if warnings:

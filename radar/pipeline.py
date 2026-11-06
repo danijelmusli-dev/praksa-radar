@@ -25,6 +25,7 @@ from radar.notify import DigestItem, build_digest, send_message
 from radar.rerank import rank_run
 from radar.sources.base import Source, run_source
 from radar.sources.registry import build_sources
+from radar.tasks import auto_analyze, build_deps
 
 log = logging.getLogger("radar.pipeline")
 
@@ -139,6 +140,21 @@ def run(
     return {"run_id": run_id, "ranked": ranked, "sent": sent, "warnings": warnings}
 
 
+def _auto_analysis(settings, run_id: str) -> None:
+    """Gap analiza za stavke sa relevantnošću 8+ (max auto_analysis_max). Ne ruši rundu."""
+    if settings.auto_analysis_max <= 0 or not settings.anthropic_api_key:
+        return
+    client = PoliteClient()
+    try:
+        with connect() as conn:
+            done = auto_analyze(build_deps(conn, settings, client), run_id)
+        log.info("automatskih analiza: %d", done)
+    except Exception:  # noqa: BLE001
+        log.exception("automatska analiza nije uspela")
+    finally:
+        client.close()
+
+
 def main() -> int:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
     settings = get_settings()
@@ -164,6 +180,7 @@ def main() -> int:
     finally:
         client.close()
     log.info("gotovo: %s", result)
+    _auto_analysis(settings, result["run_id"])
     return 0
 
 

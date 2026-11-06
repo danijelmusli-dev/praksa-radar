@@ -193,7 +193,7 @@ describe.skipIf(!hasDb)("komande", () => {
     expect(net.lastText).toContain("Još nije bilo");
     await run("/nesto");
     expect(net.lastText).toContain("Nepoznata komanda");
-    await run("/nacrt 1 pismo");
-    expect(net.lastText).toContain("Fazi 4");
+    await run("/post nešto");
+    expect(net.lastText).toContain("Fazi 5");
   });
 });
