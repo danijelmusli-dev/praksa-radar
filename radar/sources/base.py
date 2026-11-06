@@ -27,7 +27,9 @@ class SourceResult:
     error: str | None = None
 
 
-def run_source(source: Source, since: datetime, conn: Connection) -> SourceResult:
+def run_source(
+    source: Source, since: datetime, conn: Connection, now: datetime | None = None
+) -> SourceResult:
     """Pokreni izvor; nikad ne baca izuzetak. Svaki rezultat ide u source_runs."""
     try:
         items = source.fetch(since)
@@ -36,8 +38,9 @@ def run_source(source: Source, since: datetime, conn: Connection) -> SourceResul
         log.exception("izvor %s pao", source.name)
         result = SourceResult(source.name, [], f"{type(exc).__name__}: {exc}"[:500])
     conn.execute(
-        "insert into source_runs (source, items_found, error) values (%s, %s, %s)",
-        (result.name, len(result.items), result.error),
+        "insert into source_runs (source, items_found, error, started_at)"
+        " values (%s, %s, %s, coalesce(%s, now()))",
+        (result.name, len(result.items), result.error, now),
     )
     conn.commit()
     return result

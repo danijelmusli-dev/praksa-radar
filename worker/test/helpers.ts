@@ -19,6 +19,8 @@ export async function resetDb(sql: Sql): Promise<void> {
   for (const f of readdirSync(MIGRATIONS).filter((f) => f.endsWith(".sql")).sort()) {
     await sql.unsafe(readFileSync(join(MIGRATIONS, f), "utf-8"));
   }
+  // isto što i `python -m radar.db migrate`: RLS + politike za agent uloge
+  await sql.unsafe(readFileSync(join(MIGRATIONS, "..", "lockdown.sql"), "utf-8"));
 }
 
 export async function freshDb(): Promise<Sql> {

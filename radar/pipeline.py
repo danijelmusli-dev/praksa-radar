@@ -70,10 +70,10 @@ def collect(conn: Connection, sources: list[Source], now: datetime) -> CollectRe
     for source in sources:
         eif = getattr(source, "empty_is_failure", False)
         if breaker_open(conn, source.name, now, eif):
-            record_skip(conn, source.name)  # vidljivo u /izvori, ali se ne računa kao neuspeh
+            record_skip(conn, source.name, now)  # vidljivo u /izvori, ali se ne računa kao neuspeh
             out.skipped.append(source.name)
             continue
-        result = run_source(source, since, conn)
+        result = run_source(source, since, conn, now)
         if is_failure(len(result.items), result.error, eif) and (
             consecutive_failures(conn, source.name, eif) == BREAKER_FAILS
         ):

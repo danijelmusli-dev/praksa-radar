@@ -62,6 +62,12 @@ def migrate(conn: psycopg.Connection, directory: Path = MIGRATIONS_DIR) -> list[
             cur.execute("insert into schema_migrations (name) values (%s)", (path.name,))
         conn.commit()
         applied.append(path.name)
+
+    # Posle svake migracije (idempotentno): RLS na svim tabelama, bez prava za javne uloge.
+    lockdown = directory.parent / "lockdown.sql"
+    if lockdown.exists():
+        conn.execute(lockdown.read_text(encoding="utf-8"))
+        conn.commit()
     return applied
 
 

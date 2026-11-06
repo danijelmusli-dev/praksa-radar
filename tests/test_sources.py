@@ -193,4 +193,4 @@ def test_run_source_never_raises_and_records():
     good = run_source(Fine(), SINCE, conn)
     assert bad.items == [] and "RuntimeError: sajt promenjen" in bad.error
     assert len(good.items) == 1 and good.error is None
-    assert conn.rows == [("boom", 0, bad.error), ("fine", 1, None)]
+    assert conn.rows == [("boom", 0, bad.error, None), ("fine", 1, None, None)]

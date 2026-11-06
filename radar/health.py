@@ -61,10 +61,11 @@ def breaker_open(
     return now - rows[0][0] < BREAKER_PAUSE
 
 
-def record_skip(conn: Connection, source: str) -> None:
+def record_skip(conn: Connection, source: str, now: datetime | None = None) -> None:
     conn.execute(
-        "insert into source_runs (source, items_found, error) values (%s, 0, %s)",
-        (source, f"{SKIP_PREFIX} circuit breaker (3 neuspeha zaredom)"),
+        "insert into source_runs (source, items_found, error, started_at)"
+        " values (%s, 0, %s, coalesce(%s, now()))",
+        (source, f"{SKIP_PREFIX} circuit breaker (3 neuspeha zaredom)", now),
     )
     conn.commit()
 
