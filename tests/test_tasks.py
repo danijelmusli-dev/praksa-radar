@@ -304,7 +304,7 @@ def test_task_validation_and_errors(conn):
     ]:
         with pytest.raises(TaskError, match=msg):
             run_task(d, payload)
-    with pytest.raises(TaskError, match="ANTHROPIC_API_KEY"):
+    with pytest.raises(TaskError, match="GEMINI_API_KEY"):
         run_task(deps(conn, None), {"task": "analyze", "id": oid})
     conn.execute("delete from profile_versions")
     conn.commit()
