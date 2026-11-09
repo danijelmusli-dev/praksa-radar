@@ -24,12 +24,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
-      - name: Red-team (preskače se bez ANTHROPIC_API_KEY)
+      - name: Red-team (preskače se bez LLM ključa)
         run: |
-          if [ -z "$ANTHROPIC_API_KEY" ]; then echo "ANTHROPIC_API_KEY nije podešen, red-team preskočen"; exit 0; fi
+          if [ -z "$GEMINI_API_KEY" ] && [ -z "$ANTHROPIC_API_KEY" ]; then echo "LLM ključ nije podešen, red-team preskočen"; exit 0; fi
           uv sync --frozen
           uv run python -m evals.redteam.run

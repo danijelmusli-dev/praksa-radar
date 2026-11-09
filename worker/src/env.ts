@@ -7,7 +7,9 @@ export interface Env {
   TELEGRAM_BOT_TOKEN: string;
   TELEGRAM_SECRET_TOKEN: string;
   ALLOWED_CHAT_ID: string;
-  ANTHROPIC_API_KEY: string;
+  GEMINI_API_KEY?: string; // besplatan nivo (aistudio.google.com)
+  ANTHROPIC_API_KEY?: string;
+  LLM_PROVIDER?: string; // "gemini" | "anthropic"; prazno = gemini ako ima ključ
   GITHUB_TOKEN?: string;
   GITHUB_REPO?: string;
   MCP_TOKEN?: string;

@@ -1,4 +1,4 @@
-import { callClaude, extractJson, textOf } from "./anthropic";
+import { callClaude, extractJson, modelFor, textOf } from "./anthropic";
 import type { Ctx, Sql } from "./env";
 
 export interface Profile {
@@ -116,7 +116,7 @@ export async function proposeProfileChange(ctx: Ctx, instruction: string): Promi
   const base =
     current?.profile ?? normalizeProfile({ tipovi: DEFAULT_TYPES, prag_relevantnosti: 7 });
   const resp = await callClaude(ctx, {
-    model: ctx.env.RERANK_MODEL ?? "claude-haiku-5-5",
+    model: modelFor(ctx.env, "rerank"),
     system: CHANGE_SYSTEM,
     maxTokens: 800,
     messages: [

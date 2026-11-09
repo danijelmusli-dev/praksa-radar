@@ -22,7 +22,6 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from urllib.parse import urlsplit
 
-import anthropic
 import httpx
 import yaml
 from psycopg import Connection
@@ -36,7 +35,7 @@ from radar.agents.research import WebTools, research_company
 from radar.agents.writer import Analysis, strip_urls
 from radar.config import Settings, get_settings
 from radar.db import connect
-from radar.embed import Embedder, VoyageEmbedder, vec_literal
+from radar.embed import Embedder, vec_literal
 from radar.github_api import fetch_readme
 from radar.health import build_report
 from radar.http import PoliteClient
@@ -50,11 +49,12 @@ from radar.insights import (
     week_ads,
 )
 from radar.killswitch import agents_enabled
-from radar.llm import LLM, AnthropicLLM, LLMError
+from radar.llm import LLM, LLMError
 from radar.models import Opportunity
 from radar.notify import send_message
 from radar.profile import Profile, get_current_profile
 from radar.projects import sync_projects
+from radar.providers import make_agent_client, make_embedder, make_llm
 from radar.rerank import doc_text
 from radar.sources.registry import DEFAULT_CONFIG
 
@@ -73,7 +73,7 @@ class Deps:
     send: Callable[..., None]  # send(text) ili send(text, reply_markup=...)
     http: PoliteClient
     llm: LLM | None = None
-    agent_client: anthropic.Anthropic | None = None
+    agent_client: object | None = None
     embedder: Embedder | None = None
     gh: httpx.Client | None = None
     resolve: Callable[[str], bool] | None = None  # DNS provera (zamena u testovima)
@@ -217,7 +217,7 @@ def prepare(deps: Deps, oid: int):
         deps.send("Agenti su isključeni (/pokreni ih uključuje).")
         return None
     if deps.llm is None:
-        raise TaskError("ANTHROPIC_API_KEY nije podešen")
+        raise TaskError("LLM ključ nije podešen (GEMINI_API_KEY)")
     loaded = load_opportunity(deps.conn, oid)
     if loaded is None:
         raise TaskError(f"Oglas #{oid} ne postoji")
@@ -286,7 +286,7 @@ def task_projects_sync(deps: Deps) -> None:
     if not user:
         raise TaskError("GITHUB_USER nije podešen")
     if deps.llm is None or deps.embedder is None or deps.gh is None:
-        raise TaskError("Trebaju ANTHROPIC_API_KEY i VOYAGE_API_KEY")
+        raise TaskError("Trebaju LLM i embedding ključ (GEMINI_API_KEY)")
     report = sync_projects(
         deps.conn, deps.llm, deps.embedder, deps.gh, user, s.github_token, s.rerank_model
     )
@@ -304,7 +304,7 @@ def task_insights(deps: Deps) -> None:
         deps.send("Agenti su isključeni (/pokreni ih uključuje).")
         return
     if deps.llm is None:
-        raise TaskError("ANTHROPIC_API_KEY nije podešen")
+        raise TaskError("LLM ključ nije podešen (GEMINI_API_KEY)")
     ads = week_ads(deps.conn)
     if len(ads.ads) < MIN_ADS:
         deps.send(f"Tržište ove nedelje: premalo oglasa za uvid ({len(ads.ads)}).")
@@ -333,7 +333,7 @@ def task_post(deps: Deps, repo: str) -> None:
         deps.send("Agenti su isključeni (/pokreni ih uključuje).")
         return
     if deps.llm is None or deps.gh is None:
-        raise TaskError("ANTHROPIC_API_KEY nije podešen")
+        raise TaskError("LLM ključ nije podešen (GEMINI_API_KEY)")
     readme = fetch_readme(deps.gh, f"{user}/{repo}", s.github_token)
     if readme is None:
         raise TaskError(f"Repo {repo} nema README (ili ne postoji)")
@@ -362,7 +362,7 @@ def task_discover(deps: Deps) -> None:
         deps.send("Agenti su isključeni (/pokreni ih uključuje).")
         return
     if deps.agent_client is None:
-        raise TaskError("ANTHROPIC_API_KEY nije podešen")
+        raise TaskError("LLM ključ nije podešen (GEMINI_API_KEY)")
     if not s.brave_api_key:
         raise TaskError("BRAVE_API_KEY nije podešen (potreban za otkrivanje izvora)")
     cfg = yaml.safe_load(DEFAULT_CONFIG.read_text(encoding="utf-8")) or {}
@@ -468,21 +468,14 @@ def auto_analyze(deps: Deps, run_id: str) -> int:
 
 
 def build_deps(conn: Connection, settings: Settings, client: PoliteClient) -> Deps:
-    has_llm = bool(settings.anthropic_api_key)
     return Deps(
         conn=conn,
         settings=settings,
         send=send_message,
         http=client,
-        llm=AnthropicLLM(settings.anthropic_api_key, settings.draft_model, max_tokens=1800)
-        if has_llm
-        else None,
-        agent_client=anthropic.Anthropic(api_key=settings.anthropic_api_key, timeout=60.0)
-        if has_llm
-        else None,
-        embedder=VoyageEmbedder(settings.voyage_api_key, settings.embed_model)
-        if settings.voyage_api_key
-        else None,
+        llm=make_llm(settings, settings.draft_model, max_tokens=1800),
+        agent_client=make_agent_client(settings),
+        embedder=make_embedder(settings),
         gh=httpx.Client(timeout=20),
     )
 

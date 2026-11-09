@@ -17,9 +17,10 @@ from datetime import date
 from pathlib import Path
 
 from radar.config import get_settings
-from radar.llm import LLM, AnthropicLLM, LLMInvalidOutput
+from radar.llm import LLM, LLMInvalidOutput
 from radar.models import Opportunity
 from radar.profile import Profile
+from radar.providers import make_llm
 from radar.rank import hard_reject
 from radar.rerank import RerankOut, build_system, build_user
 
@@ -112,17 +113,15 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
 
     settings = get_settings()
-    if not settings.anthropic_api_key:
-        print("ANTHROPIC_API_KEY nije postavljen")
+    if not settings.has_llm:
+        print("GEMINI_API_KEY (ili ANTHROPIC_API_KEY) nije postavljen")
         return 1
     lines = Path(args.dataset).read_text(encoding="utf-8").splitlines()
     examples = [json.loads(ln) for ln in lines if ln.strip()]
     profile = Profile(**json.loads(Path(args.profile).read_text(encoding="utf-8")))
     today = date.fromisoformat(args.today) if args.today else date.today()
 
-    metrics = evaluate(
-        examples, profile, AnthropicLLM(settings.anthropic_api_key, settings.rerank_model), today
-    )
+    metrics = evaluate(examples, profile, make_llm(settings, settings.rerank_model), today)
     print(json.dumps(metrics, indent=2, ensure_ascii=False))
 
     baseline_path = Path(args.baseline)

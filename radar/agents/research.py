@@ -11,7 +11,6 @@ import re
 from collections.abc import Callable
 from urllib.parse import urlsplit
 
-import anthropic
 import httpx
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
@@ -179,7 +178,7 @@ def validate_notes(text: str, seen: set[str]) -> CompanyNotes | None:
 
 
 def research_company(
-    client: anthropic.Anthropic,
+    client,
     model: str,
     *,
     org: str | None,

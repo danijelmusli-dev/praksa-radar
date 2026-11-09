@@ -278,7 +278,7 @@ def repair_source(
         )
         return RepairOutcome(False, "previše pokušaja")
     if deps.agent_client is None:
-        raise RuntimeError("ANTHROPIC_API_KEY nije podešen")
+        raise RuntimeError("LLM ključ nije podešen (GEMINI_API_KEY)")
     kv_set(conn, _attempts_key(name), attempts + 1)
 
     git = git or Git(root)

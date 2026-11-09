@@ -14,8 +14,9 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
-import anthropic
 from psycopg import Connection
+
+from radar.llm import API_ERRORS
 
 log = logging.getLogger(__name__)
 
@@ -69,7 +70,7 @@ def _block_to_dict(block) -> dict:
 
 
 def run_agent(
-    client: anthropic.Anthropic,
+    client,
     model: str,
     system: str,
     user: str,
@@ -104,7 +105,7 @@ def run_agent(
                 messages=messages,
                 tools=[t.spec() for t in tools],
             )
-        except anthropic.APIError as exc:
+        except API_ERRORS as exc:
             result.outcome = "greška"
             result.trace.append({"step": result.steps + 1, "error": f"{type(exc).__name__}"})
             return result

@@ -45,7 +45,7 @@ Dve putanje dele istu bazu: zakazani pipeline (puni bazu i šalje digest) i mali
 
 1. **Profil**: opisan rečima (`/filter dodaj: embedded i AI, bez čistog frontenda`), LLM ga pretvara u JSON, svaka izmena je nova verzija (`/filter undo`).
 2. **Tvrdi filteri**: grad ili remote, tip, rok, isključenja. Bez troška.
-3. **Semantički rang**: kosinusna sličnost embeddinga (Voyage), dalje ide prvih 30.
+3. **Semantički rang**: kosinusna sličnost embeddinga (Gemini ili Voyage), dalje ide prvih 30.
 4. **LLM rerank**: ocena 0–10, tip, rok i jedna rečenica „zašto“. Prag za slanje je podešavanje (`/prag`).
 5. **Učenje**: poslednjih 20 ocena (👍/👎/„Manje ovakvih“) ulazi u prompt kao primeri.
 
@@ -122,7 +122,7 @@ Eval se pokreće i kao GitHub Action na svaki PR koji menja prompt ili logiku ra
 
 ## Tehnologije
 
-Python 3.12 (httpx, BeautifulSoup, psycopg, pydantic, uv) · GitHub Actions · Cloudflare Workers (TypeScript, Hyperdrive) · Supabase Postgres + pgvector · Claude (Haiku za rerank, Sonnet za agente i nacrte) · Voyage embeddingi · Telegram Bot API · MCP.
+Python 3.12 (httpx, BeautifulSoup, psycopg, pydantic, uv) · GitHub Actions · Cloudflare Workers (TypeScript, Hyperdrive) · Supabase Postgres + pgvector · Gemini (besplatan nivo; rerank, agenti, nacrti) ili Claude (Haiku/Sonnet) preko `LLM_PROVIDER` · Gemini ili Voyage embeddingi · Telegram Bot API · MCP.
 
 ## Struktura
 

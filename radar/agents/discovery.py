@@ -12,7 +12,6 @@ from collections.abc import Callable
 from pathlib import Path
 from urllib.parse import urlsplit
 
-import anthropic
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
@@ -168,7 +167,7 @@ def verify_proposal(p: Proposal, tools: DiscoveryTools, known: dict[str, str]) -
 
 
 def discover_sources(
-    client: anthropic.Anthropic,
+    client,
     model: str,
     *,
     web: WebTools,

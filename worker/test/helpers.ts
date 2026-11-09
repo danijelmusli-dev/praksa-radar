@@ -40,6 +40,7 @@ type Queued = (body: any) => unknown;
 export class Net {
   calls: Call[] = [];
   claude: Queued[] = [];
+  gemini: Queued[] = [];
   dispatchStatus = 204;
   killVar: string | null = null;
 
@@ -52,6 +53,12 @@ export class Net {
     if (url === "https://api.anthropic.com/v1/messages") {
       const next = this.claude.shift();
       if (!next) throw new Error("nema više spremnih Anthropic odgovora");
+      const out = next(body);
+      return out instanceof Response ? out : json(out);
+    }
+    if (url.startsWith("https://generativelanguage.googleapis.com/")) {
+      const next = this.gemini.shift();
+      if (!next) throw new Error("nema više spremnih Gemini odgovora");
       const out = next(body);
       return out instanceof Response ? out : json(out);
     }
@@ -76,6 +83,9 @@ export class Net {
   }
   get claudeCalls() {
     return this.calls.filter((c) => c.url.includes("anthropic"));
+  }
+  get geminiCalls() {
+    return this.calls.filter((c) => c.url.includes("generativelanguage"));
   }
 }
 

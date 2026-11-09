@@ -1,4 +1,5 @@
-import type { Ctx } from "./env";
+import type { Ctx, Env } from "./env";
+import { callGemini } from "./gemini";
 
 export interface ToolSpec {
   name: string;
@@ -8,7 +9,13 @@ export interface ToolSpec {
 
 export type Block =
   | { type: "text"; text: string }
-  | { type: "tool_use"; id: string; name: string; input: Record<string, unknown> }
+  | {
+      type: "tool_use";
+      id: string;
+      name: string;
+      input: Record<string, unknown>;
+      thoughtSignature?: string; // Gemini: vraća se uz isti poziv alata
+    }
   | { type: "tool_result"; tool_use_id: string; content: string; is_error?: boolean };
 
 export interface Msg {
@@ -24,15 +31,39 @@ export interface ClaudeResponse {
 
 export class ClaudeError extends Error {}
 
-export async function callClaude(
-  ctx: Ctx,
-  opts: { model: string; system: string; messages: Msg[]; tools?: ToolSpec[]; maxTokens?: number },
-): Promise<ClaudeResponse> {
+export type LlmOpts = {
+  model: string;
+  system: string;
+  messages: Msg[];
+  tools?: ToolSpec[];
+  maxTokens?: number;
+};
+
+/** LLM_PROVIDER ("gemini" | "anthropic"); prazno = gemini ako postoji GEMINI_API_KEY. */
+export function provider(env: Env): "gemini" | "anthropic" {
+  if (env.LLM_PROVIDER === "gemini" || env.LLM_PROVIDER === "anthropic") return env.LLM_PROVIDER;
+  return env.GEMINI_API_KEY ? "gemini" : "anthropic";
+}
+
+/** Podrazumevani model po provajderu; RERANK_MODEL / AGENT_MODEL ga pregaziti. */
+export function modelFor(env: Env, role: "rerank" | "agent"): string {
+  const override = role === "rerank" ? env.RERANK_MODEL : env.AGENT_MODEL;
+  if (override) return override;
+  if (provider(env) === "gemini") return role === "rerank" ? "gemini-flash-lite-latest" : "gemini-flash-latest";
+  return role === "rerank" ? "claude-haiku-5-5" : "claude-sonnet-5-5";
+}
+
+/** Ime je zaostalo iz prve verzije: poziva Anthropic ili Gemini, a vraća Anthropic oblik. */
+export async function callClaude(ctx: Ctx, opts: LlmOpts): Promise<ClaudeResponse> {
+  return provider(ctx.env) === "gemini" ? callGemini(ctx, opts) : callAnthropic(ctx, opts);
+}
+
+async function callAnthropic(ctx: Ctx, opts: LlmOpts): Promise<ClaudeResponse> {
   const res = await ctx.fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
       "content-type": "application/json",
-      "x-api-key": ctx.env.ANTHROPIC_API_KEY,
+      "x-api-key": ctx.env.ANTHROPIC_API_KEY ?? "",
       "anthropic-version": "2023-06-01",
     },
     body: JSON.stringify({

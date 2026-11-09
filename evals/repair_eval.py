@@ -12,7 +12,6 @@ import sys
 import tempfile
 from pathlib import Path
 
-import anthropic
 import httpx
 import yaml
 
@@ -21,6 +20,7 @@ from radar.agents.loop import run_agent
 from radar.agents.repair import SYSTEM, TOKEN_BUDGET, RepairTools
 from radar.config import get_settings
 from radar.http import PoliteClient
+from radar.providers import make_agent_client
 from radar.sources.html_generic import parse_html_generic
 
 JOBS = [
@@ -76,9 +76,7 @@ def oracle(root: Path) -> tuple[bool, str]:
     return True, "ok"
 
 
-def run_scenario(
-    client: anthropic.Anthropic, model: str, idx: int, name: str, stale: dict, html: str
-) -> dict:
+def run_scenario(client, model: str, idx: int, name: str, stale: dict, html: str) -> dict:
     host = f"sajt-{idx:02d}.test"
     entry = {
         "name": "izvor",
@@ -128,10 +126,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--model", default=None)
     args = ap.parse_args(argv)
     s = get_settings()
-    if not s.anthropic_api_key:
-        print("ANTHROPIC_API_KEY nije postavljen")
+    if not s.has_llm:
+        print("GEMINI_API_KEY (ili ANTHROPIC_API_KEY) nije postavljen")
         return 2
-    client = anthropic.Anthropic(api_key=s.anthropic_api_key, max_retries=3, timeout=90.0)
+    client = make_agent_client(s, timeout=90.0)
     rows = [
         run_scenario(client, args.model or s.research_model, i, *sc)
         for i, sc in enumerate(SCENARIOS, 1)

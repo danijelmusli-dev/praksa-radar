@@ -16,11 +16,11 @@ Redosled: A (jednom, na početku) → B (testiranje Faze 0–1) → C…G po faz
 - [ ] **Telegram**: @BotFather → `/newbot` → sačuvaj token. Pošalji botu bilo koju poruku, pa otvori `https://api.telegram.org/bot<TOKEN>/getUpdates` i uzmi `chat.id`
 - [ ] **Supabase**: novi projekat (free). SQL editor: `create extension if not exists vector;`
   - Connection string: **Supavisor pooler, session mode, port 5432** (direktna veza je samo IPv6, Actions je IPv4)
-- [ ] **Anthropic**: API ključ + postavi mesečni limit potrošnje u konzoli
-- [ ] **Voyage AI**: API ključ
+- [ ] **Gemini (besplatno)**: https://aistudio.google.com → Get API key (bez kartice). Jedan ključ pokriva LLM i embeddinge. Proveri aktuelne limite besplatnog nivoa; free tier može da koristi podatke za treniranje, pa ne stavljaj osetljive stvari u profil
+  - Plaćena alternativa: `LLM_PROVIDER=anthropic` + `ANTHROPIC_API_KEY` + `VOYAGE_API_KEY`
 - [ ] **GitHub Secrets** (Settings → Secrets → Actions):
   - `DATABASE_URL`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`
-  - `ANTHROPIC_API_KEY`, `VOYAGE_API_KEY`
+  - `GEMINI_API_KEY`
   - `GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET`, `GMAIL_REFRESH_TOKEN` (posle koraka ispod)
 - [ ] Lokalni `.env` (kopija `.env.example`) sa istim vrednostima, za lokalno testiranje
 
@@ -65,15 +65,15 @@ Redosled: A (jednom, na početku) → B (testiranje Faze 0–1) → C…G po faz
 ## D. Faza 2 — Lični filter
 
 - [ ] Napiši profil rečima u `profil.txt` (interesovanja, šta isključuješ, gradovi, nivo, tipovi). Ne commituj ga, profil živi u bazi
-- [ ] `ANTHROPIC_API_KEY` i `VOYAGE_API_KEY` u lokalnom `.env` i u GitHub Secrets (workflow `radar` ih već koristi)
+- [ ] `GEMINI_API_KEY` u lokalnom `.env` i u GitHub Secrets (workflow `radar` ih već koristi)
 - [ ] Učitaj profil: `uv run python -m radar.cli set-profile profil.txt` → proveri izlaz JSON-a (`show-profile`); ako je LLM nešto pogrešno razumeo, doteraj tekst i ponovi (svaki poziv je nova verzija)
 - [ ] Prvi pravi rang: ručno pokreni `radar` workflow, pa pogledaj digest. Reason u svakoj stavci mora imati smisla
-- [ ] Ako AI nije dostupan, digest nosi oznaku „⚠ bez AI ranga“ — proveri da je to retko (Supabase `scores.reason`, Anthropic konzola)
+- [ ] Ako AI nije dostupan, digest nosi oznaku „⚠ bez AI ranga“ — proveri da je to retko (Supabase `scores.reason`, Google AI Studio → usage)
 - [ ] **Ručno označi 50 oglasa** (relevantno da/ne): `uv run python -m evals.export 50 > evals/dataset.todo.jsonl`, u svakom redu `"relevant": null` zameni sa `true`/`false` (po želji dodaj `"type"` i `"deadline"` ako znaš tačnu vrednost), sačuvaj kao `evals/dataset.jsonl`
 - [ ] Napravi `evals/profile.json` (kopiraj `evals/profile.example.json` i prilagodi). **Pazi:** repo je javan, stavi samo opšte stvari koje ti ne smetaju da budu javne
 - [ ] Pokreni eval: `uv run python -m evals.run --min-precision 0.7`. Cilj ≥70% preciznosti; ako nije, odlučujemo da li menjamo prompt, prag ili profil
 - [ ] Kad si zadovoljan rezultatom: `uv run python -m evals.run --save-baseline` pa commit `evals/baseline.json` (od tada PR koji spusti preciznost za >5 p.p. obara build)
-- [ ] Posle par dana proveri potrošnju u Anthropic i Voyage konzoli (rerank ide samo za top 30 po rundi)
+- [ ] Posle par dana proveri da nisi probio dnevni limit besplatnog nivoa u AI Studiju (rerank ide samo za top 30 po rundi)
 - [ ] Opciono: `uv run python -m radar.cli feedback <id> down` za stavke koje ti ne odgovaraju, dok Telegram dugmići ne stignu u Fazi 3 (poslednjih 20 ocena ulazi u prompt)
 
 ## E. Faza 3 — Interaktivnost (Telegram Worker, tracker, MCP, asistent)
@@ -91,7 +91,7 @@ Kod je gotov (`worker/`, migracija `0003`). Ovo je sve što ostaje tebi, redom:
   - `TELEGRAM_BOT_TOKEN`
   - `TELEGRAM_SECRET_TOKEN` (nasumičan string, npr. `openssl rand -hex 24`; ne sme biti isti kao bot token)
   - `ALLOWED_CHAT_ID` (tvoj `chat.id` iz koraka A)
-  - `ANTHROPIC_API_KEY`
+  - `GEMINI_API_KEY`
   - `GITHUB_TOKEN` (fine-grained PAT samo za ovaj repo: **Contents: Read and write** za `/sad`, **Variables: Read** za rezervni kill switch)
   - `MCP_TOKEN` (nasumičan string; bez njega je `/mcp` isključen)
 - [ ] `npx wrangler deploy` → zapiši URL (`https://praksa-radar.<nalog>.workers.dev`)
@@ -118,8 +118,8 @@ Kod je gotov (`worker/`, migracija `0003`). Ovo je sve što ostaje tebi, redom:
 
 **Eval asistenta** (kriterijum Faze 3: „asistent tačno odgovara na eval pitanja“)
 - [ ] Pregledaj 25 pitanja u `worker/evals/assistant.cases.json` (očekivani alat, parametri i odgovor); promeni šta ti ne odgovara
-- [ ] Pokreni nad pravim modelom (košta nekoliko centi): `cd worker && ANTHROPIC_API_KEY=… TEST_DATABASE_URL=postgresql://… npm run eval:assistant`, ili Actions → `eval-assistant` → Run workflow. Cilj: tačnost alata ≥90%, odgovora ≥80%. Rezultat je u `worker/evals/last-run.json`; promašaji se ispisuju
-- [ ] Anthropic: proveri potrošnju posle prvih dana (asistent koristi Sonnet; budžet je 60.000 tokena po pitanju, max 15 koraka)
+- [ ] Pokreni nad pravim modelom (troši dnevnu kvotu besplatnog nivoa): `cd worker && GEMINI_API_KEY=… TEST_DATABASE_URL=postgresql://… npm run eval:assistant`, ili Actions → `eval-assistant` → Run workflow. Cilj: tačnost alata ≥90%, odgovora ≥80%. Rezultat je u `worker/evals/last-run.json`; promašaji se ispisuju
+- [ ] Gemini: proveri kvotu posle prvih dana (asistent koristi `gemini-flash-latest`; budžet je 60.000 tokena po pitanju, max 15 koraka)
 
 ## F. Faza 4 — Helper (projekti, analiza, nacrti)
 
@@ -191,7 +191,7 @@ Kod je gotov (migracija `0005`, `radar/health.py`, `radar/sources/instagram.py`,
 - [ ] **Eval agenta 1**: `uv run python -m evals.repair_eval` (10 pokvarenih sajtova). Cilj ≥70% popravki koje prolaze; zapiši rezultat
 - [ ] **Eval agenta 2** (nije automatizovan): sakrij 20 poznatih dobrih izvora iz `sources.yaml`, pokreni `/izvori traži` 4 nedelje i izbroj koliko je pronađeno; prati udeo predloga koje prihvataš
 - [ ] **Eval agenta 3** (nije automatizovan): napiši „idealnu“ gap analizu za 10 oglasa i uporedi ocenom 1–5 + proveri činjenice o firmi
-- [ ] Anthropic: mesečni limit potrošnje je postavljen (agenti troše tokene; `/agenti` i nedeljni izveštaj pokazuju korake i tokene)
+- [ ] Gemini: proveri dnevne limite (agenti troše tokene; `/agenti` i nedeljni izveštaj pokazuju korake i tokene)
 - [ ] **30 dana rada bez ručne intervencije** (kriterijum uspeha Faze 5)
 
 ## H. Faza 6 — Dorada za CV

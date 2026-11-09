@@ -13,9 +13,8 @@ from pathlib import Path
 
 from radar.config import get_settings
 from radar.db import connect, kv_set
-from radar.embed import VoyageEmbedder
-from radar.llm import AnthropicLLM
 from radar.profile import get_current_profile, parse_profile, save_profile
+from radar.providers import make_embedder, make_llm
 from radar.rank import FILTER_KEY, KeywordFilter, get_filter
 
 
@@ -33,15 +32,13 @@ def main(argv: list[str]) -> int:
         return 0
     if cmd == "set-profile" and len(args) == 1:
         s = get_settings()
-        if not (s.anthropic_api_key and s.voyage_api_key):
-            print("Trebaju ANTHROPIC_API_KEY i VOYAGE_API_KEY")
+        if not (s.has_llm and s.has_embedder):
+            print("Trebaju GEMINI_API_KEY (ili ANTHROPIC_API_KEY + VOYAGE_API_KEY)")
             return 1
         text = Path(args[0]).read_text(encoding="utf-8")
-        profile = parse_profile(AnthropicLLM(s.anthropic_api_key, s.rerank_model), text)
+        profile = parse_profile(make_llm(s, s.rerank_model), text)
         with connect() as conn:
-            stored = save_profile(
-                conn, VoyageEmbedder(s.voyage_api_key, s.embed_model), text, profile
-            )
+            stored = save_profile(conn, make_embedder(s), text, profile)
         print(f"profil verzija {stored.id}:\n{profile.model_dump_json(indent=2)}")
         return 0
     if cmd == "show-profile" and not args:

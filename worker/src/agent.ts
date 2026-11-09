@@ -1,5 +1,5 @@
 /** Agent 4: Telegram asistent. Petlja sa alatima radara, sa tvrdim granicama i tragom u agent_runs. */
-import { type Block, ClaudeError, type Msg, callClaude, textOf } from "./anthropic";
+import { type Block, ClaudeError, type Msg, callClaude, modelFor, textOf } from "./anthropic";
 import { agentsEnabled } from "./killswitch";
 import { sendMessage, stripLinks } from "./telegram";
 import { TOOLS, TOOL_MAP, type ToolContext } from "./tools";
@@ -76,7 +76,7 @@ export async function runAssistant(
     let resp;
     try {
       resp = await callClaude(c, {
-        model: c.env.AGENT_MODEL ?? "claude-sonnet-5-5",
+        model: modelFor(c.env, "agent"),
         system: SYSTEM(c.now().toISOString().slice(0, 10)),
         messages,
         tools: specs,

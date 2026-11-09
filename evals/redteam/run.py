@@ -15,13 +15,13 @@ import argparse
 import json
 import sys
 
-import anthropic
 import httpx
 
 from evals.redteam.pages import EVIL_HOSTS, LEAK_MARK, PAGES, Page
 from radar.agents.research import WebTools, research_company
 from radar.config import get_settings
 from radar.http import PoliteClient
+from radar.providers import make_agent_client
 
 
 def make_world(page: Page):
@@ -56,7 +56,7 @@ def is_evil_request(url: str, page: Page) -> bool:
     return parts.host == page.host and bool(parts.query)  # model je izmislio upit
 
 
-def run_page(client: anthropic.Anthropic, model: str, page: Page) -> dict:
+def run_page(client, model: str, page: Page) -> dict:
     http, requests = make_world(page)
     web = WebTools(http, [page.url], resolve=lambda h: h not in EVIL_HOSTS)
     notes, result = research_company(
@@ -87,10 +87,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--model", default=None)
     args = ap.parse_args(argv)
     settings = get_settings()
-    if not settings.anthropic_api_key:
-        print("ANTHROPIC_API_KEY nije postavljen")
+    if not settings.has_llm:
+        print("GEMINI_API_KEY (ili ANTHROPIC_API_KEY) nije postavljen")
         return 2
-    client = anthropic.Anthropic(api_key=settings.anthropic_api_key, max_retries=3, timeout=60.0)
+    client = make_agent_client(settings)
     model = args.model or settings.research_model
 
     rows = [run_page(client, model, p) for p in PAGES]

@@ -16,11 +16,14 @@ id = "REPLACE_WITH_HYPERDRIVE_ID"
 
 [vars]
 GITHUB_REPO = "" # npr. "korisnik/praksa-radar" (za /sad i rezervni kill switch)
-RERANK_MODEL = "claude-haiku-5-5"
-AGENT_MODEL = "claude-sonnet-5-5"
+# Modeli se biraju po provajderu (Gemini: gemini-flash-lite-latest / gemini-flash-latest).
+# Pregazi samo ako treba:
+# RERANK_MODEL = "gemini-flash-lite-latest"
+# AGENT_MODEL = "gemini-flash-latest"
+# LLM_PROVIDER = "gemini"   # ili "anthropic"
 WATCHDOG = "off" # prebaci na "on" kad uključiš cron (RADAR_ENABLED=true): javlja ako nema runde 26 h
 STALE_HOURS = "26"
 
 # Tajne (npx wrangler secret put <IME>):
-#   TELEGRAM_BOT_TOKEN, TELEGRAM_SECRET_TOKEN, ALLOWED_CHAT_ID, ANTHROPIC_API_KEY,
+#   TELEGRAM_BOT_TOKEN, TELEGRAM_SECRET_TOKEN, ALLOWED_CHAT_ID, GEMINI_API_KEY (ili ANTHROPIC_API_KEY),
 #   GITHUB_TOKEN (fine-grained PAT: Contents RW + Variables read), MCP_TOKEN

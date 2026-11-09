@@ -19,7 +19,7 @@ from radar.agents.repair import check_merged_repairs
 from radar.config import Settings, get_settings
 from radar.db import connect, kv_get, kv_set
 from radar.dedup import upsert_opportunities
-from radar.embed import Embedder, VoyageEmbedder
+from radar.embed import Embedder
 from radar.github_api import dispatch_event
 from radar.health import (
     BREAKER_FAILS,
@@ -31,9 +31,10 @@ from radar.health import (
     worker_alive,
 )
 from radar.http import PoliteClient
-from radar.llm import LLM, AnthropicLLM
+from radar.llm import LLM
 from radar.normalize import to_opportunity
 from radar.notify import DigestItem, build_digest, send_message
+from radar.providers import make_embedder, make_llm
 from radar.rerank import rank_run
 from radar.sources.base import Source, run_source
 from radar.sources.registry import build_sources
@@ -193,7 +194,7 @@ def run(
 
 def _auto_analysis(settings, run_id: str) -> None:
     """Gap analiza za stavke sa relevantnošću 8+ (max auto_analysis_max). Ne ruši rundu."""
-    if settings.auto_analysis_max <= 0 or not settings.anthropic_api_key:
+    if settings.auto_analysis_max <= 0 or not settings.has_llm:
         return
     client = PoliteClient()
     try:
@@ -243,16 +244,8 @@ def main() -> int:
                 conn,
                 build_sources(settings, client, conn=conn),
                 fail_after=os.environ.get("RADAR_FAIL_AFTER"),
-                llm=(
-                    AnthropicLLM(settings.anthropic_api_key, settings.rerank_model)
-                    if settings.anthropic_api_key
-                    else None
-                ),
-                embedder=(
-                    VoyageEmbedder(settings.voyage_api_key, settings.embed_model)
-                    if settings.voyage_api_key
-                    else None
-                ),
+                llm=make_llm(settings, settings.rerank_model),
+                embedder=make_embedder(settings),
                 rerank_model=settings.rerank_model,
                 on_breaker_open=_breaker_alarm(settings, send_message),
             )
