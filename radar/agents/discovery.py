@@ -27,6 +27,9 @@ TOKEN_BUDGET = 80_000
 MIN_ITEMS = 3
 MAX_PROPOSALS = 3
 DEFAULT_TOPICS = [
+    "domaće softverske firme karijera studentska praksa junior programer Srbija",
+    "software engineering intern working student junior developer Belgrade Novi Sad Niš",
+    "Balkan software companies careers engineering internship entry level remote from Serbia",
     "IT praksa Srbija studenti",
     "studentske prakse Beograd Novi Sad",
     "hackathon takmičenje studenti Srbija",
@@ -35,8 +38,11 @@ DEFAULT_TOPICS = [
 ]
 
 SYSTEM = """\
-Tražiš NOVE izvore studentskih praksa, radionica i takmičenja u Srbiji (sajtovi firmi sa \
-karijera stranicom, studentske organizacije, fakulteti, akademije). Nemaš nikakve lične podatke.
+Tražiš nove izvore za studente: prakse i početne poslove u softverskom inženjerstvu, kao i \
+konferencije, radionice i takmičenja. Prvo traži zvanične karijerne stranice domaćih firmi \
+u Srbiji, zatim lokalnih firmi širom Balkana. Uvaži i studentske organizacije i fakultete. \
+Za regionalne izvore navedi lokaciju i uslove rada iz Srbije samo kada su objavljeni. \
+Nemaš nikakve lične podatke.
 
 POSTUPAK
 1. list_known_sources: vidi šta već pratimo (ne predlaži isto).
@@ -85,6 +91,14 @@ class Proposals(BaseModel):
     proposals: list[Proposal] = Field(default_factory=list, max_length=MAX_PROPOSALS)
 
 
+def source_key(url: str) -> str:
+    parts = urlsplit(url)
+    host = (parts.hostname or "").lower().removeprefix("www.")
+    if host in {"luma.com", "lu.ma", "api2.luma.com"}:
+        return url.rstrip("/").replace("://lu.ma/", "://luma.com/")
+    return host
+
+
 def known_hosts(config_path: Path) -> dict[str, str]:
     """{host: ime izvora} za sve izvore iz config-a (hosts za dedup)."""
     cfg = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
@@ -92,7 +106,7 @@ def known_hosts(config_path: Path) -> dict[str, str]:
     for e in cfg.get("sources") or []:
         host = urlsplit(e.get("url") or "").hostname
         if host:
-            out[host.lower().removeprefix("www.")] = e["name"]
+            out[source_key(e["url"])] = e["name"]
     out["helloworld.rs"] = "helloworld"
     return out
 
@@ -153,7 +167,7 @@ def parse_proposals(text: str) -> list[Proposal]:
 
 def verify_proposal(p: Proposal, tools: DiscoveryTools, known: dict[str, str]) -> tuple[bool, str]:
     """Kod, a ne agent, odlučuje: nov host, selektori zaista daju bar 3 stavke sa naslovima."""
-    host = (urlsplit(p.url).hostname or "").lower().removeprefix("www.")
+    host = source_key(p.url)
     if host in known:
         return False, f"izvor već postoji ({known[host]})"
     try:
@@ -192,7 +206,7 @@ def discover_sources(
         ok, why = verify_proposal(p, tools, known)
         if ok:
             verified.append((p, int(why.split()[0])))
-            known[(urlsplit(p.url).hostname or "").lower().removeprefix("www.")] = p.name
+            known[source_key(p.url)] = p.name
         else:
             rejected.append(f"{p.name}: {why}")
     return verified, result, rejected

@@ -33,7 +33,7 @@ from radar.health import (
 from radar.http import PoliteClient
 from radar.llm import LLM
 from radar.normalize import to_opportunity
-from radar.notify import DigestItem, build_digest, send_message
+from radar.notify import TZ, DigestItem, build_digest, send_message
 from radar.providers import make_embedder, make_llm
 from radar.rerank import rank_run
 from radar.sources.base import Source, run_source
@@ -106,10 +106,29 @@ def send_digest(
     send: Callable[..., None],
     warnings: list[str],
 ) -> int:
+    changes = conn.execute(
+        "select id, title, url, event_start, cancelled, event_all_day from opportunities"
+        " where event_update_pending order by id"
+    ).fetchall()
+    for oid, title, url, start, cancelled, all_day in changes:
+        fmt = "%d.%m.%Y" if all_day else "%d.%m.%Y %H:%M %Z"
+        status = "Otkazano" if cancelled else "Novi termin " + start.astimezone(TZ).strftime(fmt)
+        send(f"{status} · {title}\n{url}")
+        conn.execute(
+            "update opportunities set event_update_pending=false where id=%s"
+            " and event_start=%s and cancelled=%s and event_all_day=%s",
+            (oid, start, cancelled, all_day),
+        )
+        conn.commit()
     rows = conn.execute(
-        "select o.id, s.relevance, o.title, o.org, o.location, o.deadline, o.type, s.reason, o.url"
+        "select o.id, s.relevance, o.title, o.org, o.location, o.deadline, o.type, s.reason, o.url,"
+        " o.event_start, o.event_all_day"
         " from scores s join opportunities o on o.id = s.opportunity_id"
-        " where s.passed and s.sent_at is null order by s.relevance desc, o.id"
+        " where s.passed and s.sent_at is null and not o.cancelled"
+        " and (o.event_start is null or o.event_start > %s or (o.event_all_day and"
+        " (o.event_start at time zone 'Europe/Belgrade')::date >= %s))"
+        " and (o.deadline is null or o.deadline >= %s) order by s.relevance desc, o.id",
+        (now, now.astimezone(TZ).date(), now.date()),
     ).fetchall()
     items = [DigestItem(*r) for r in rows]
     messages = build_digest(items, now, warnings)

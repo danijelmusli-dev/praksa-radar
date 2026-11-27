@@ -107,6 +107,8 @@ class SourceStat:
     runs: int = 0
     errors: int = 0
     items: int = 0
+    unique_items: int = 0
+    saved_items: int = 0
     last_error: str | None = None
     breaker: bool = False
     below_min: tuple[int, int] | None = None  # (nađeno, minimum)
@@ -137,6 +139,7 @@ class Report:
                 else "✅"
             )
             line = f"{mark} {s.name}: {s.runs} pokretanja, {s.errors} grešaka, {s.items} stavki"
+            line += f" · {s.unique_items} novih · {s.saved_items} sačuvanih među novima"
             if s.breaker:
                 line += " · circuit breaker otvoren"
             if s.below_min:
@@ -171,16 +174,27 @@ def build_report(
             "select distinct source from source_runs where started_at >= %s", (since,)
         )
     } | set(minimums)
-    for name in sorted(names):
+    counts = {
+        source: (total, saved)
+        for source, total, saved in conn.execute(
+            "select o.source, count(*), count(a.opportunity_id) from opportunities o"
+            " left join applications a on a.opportunity_id=o.id"
+            " where o.first_seen >= %s group by o.source",
+            (since,),
+        )
+    }
+    for name in sorted(names | set(counts)):
         rows = conn.execute(
             "select items_found, error from source_runs where source = %s and started_at >= %s"
             " and (error is null or error not like %s) order by started_at desc",
             (name, since, SKIP_PREFIX + "%"),
         ).fetchall()
-        eif = empty_is_failure.get(name, name in minimums)
+        eif = empty_is_failure.get(name, name in minimums and minimums[name] > 0)
         stat = SourceStat(
             name,
             runs=len(rows),
+            unique_items=counts.get(name, (0, 0))[0],
+            saved_items=counts.get(name, (0, 0))[1],
             errors=sum(1 for i, e in rows if is_failure(i, e, eif)),
             items=sum(i for i, _ in rows),
             last_error=next((e for _, e in rows if e), None),

@@ -1,6 +1,6 @@
 import re
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, datetime
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 TRACKING_PARAMS = {"fbclid", "gclid", "trk", "refid", "trackingid", "mc_cid", "mc_eid", "ref"}
@@ -30,6 +30,9 @@ class Opportunity:
     raw_text: str
     source: str
     type: str | None = None
+    event_start: datetime | None = None
+    cancelled: bool = False
+    event_all_day: bool = False
 
 
 def canonical_url(url: str) -> str:

@@ -12,11 +12,23 @@ from radar.sources.gmail_label import GmailLabelSource
 from radar.sources.helloworld import HelloWorldSource
 from radar.sources.html_generic import HtmlGenericSource
 from radar.sources.instagram import InstagramSource
+from radar.sources.luma import LumaCalendarSource
+from radar.sources.rss import RssSource
 
 log = logging.getLogger(__name__)
 
 DEFAULT_CONFIG = Path(__file__).resolve().parents[2] / "config" / "sources.yaml"
-GENERIC_KEYS = ("item", "title", "link", "text", "org", "location")
+GENERIC_KEYS = (
+    "item",
+    "title",
+    "link",
+    "text",
+    "org",
+    "location",
+    "deadline",
+    "pagination",
+    "employer",
+)
 
 
 def build_sources(
@@ -36,6 +48,10 @@ def build_sources(
         elif kind == "html_generic":
             selectors = {k: entry[k] for k in GENERIC_KEYS if k in entry}
             source = HtmlGenericSource(entry["name"], client, entry["url"], **selectors)
+        elif kind == "rss":
+            source = RssSource(entry["name"], client, entry["url"])
+        elif kind == "ical":
+            source = LumaCalendarSource(entry["name"], client, entry["url"])
         elif kind == "instagram":
             if not (settings.instagram_access_token and settings.instagram_user_id and conn):
                 log.info("instagram izvor preskočen: nema tokena ili baze")
@@ -57,6 +73,7 @@ def build_sources(
                 settings.gmail_client_id,
                 settings.gmail_client_secret,
                 settings.gmail_refresh_token,
+                publisher_client=client,
             )
         )
     return sources

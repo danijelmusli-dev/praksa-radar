@@ -1,7 +1,7 @@
 /** Upiti nad bazom. Agent i MCP rade kroz uloge sa najmanjim privilegijama (set local role). */
 import type { Sql } from "./env";
 
-export const TYPES = ["praksa", "projekat", "radionica", "takmičenje", "posao", "nebitno"] as const;
+export const TYPES = ["praksa", "projekat", "radionica", "takmičenje", "konferencija", "meetup", "posao", "nebitno"] as const;
 export const STATUSES = ["sačuvano", "prijavljen", "intervju", "ponuda", "odbijen", "odustao"] as const;
 export type Status = (typeof STATUSES)[number];
 
@@ -42,6 +42,8 @@ export async function searchOpportunities(sql: Sql, a: SearchArgs) {
         ${a.type ? tx`and o.type = ${a.type}` : tx``}
         ${a.location ? tx`and o.location ilike ${like(a.location)}` : tx``}
         ${a.deadline_before ? tx`and o.deadline <= ${a.deadline_before}::date` : tx``}
+        and not o.cancelled and (o.event_start is null or o.event_start > now() or (o.event_all_day and
+          (o.event_start at time zone 'Europe/Belgrade')::date >= current_date))
         and (o.deadline is null or o.deadline >= current_date)
       order by ${score} desc, s.relevance desc nulls last, o.first_seen desc
       limit 10`;

@@ -17,7 +17,7 @@ Vrati SAMO JSON objekat sa tačno ovim poljima:
   "interesovanja": [string],            // teme i tehnologije koje korisnika zanimaju
   "iskljuceno": [string],               // šta ne želi (npr. "čisti frontend", "senior", "sales")
   "lokacije": [string],                 // gradovi i/ili "remote"
-  "tipovi": [string],                   // iz skupa: praksa, projekat, radionica, takmičenje, posao
+  "tipovi": [string], // praksa, projekat, radionica, takmičenje, konferencija, meetup, posao
   "nivo": string,                       // npr. "student 4. godine"
   "jezici": [string],
   "prag_relevantnosti": number          // 0-10, podrazumevano 7
@@ -32,7 +32,15 @@ class Profile(BaseModel):
     iskljuceno: list[str] = Field(default_factory=list)
     lokacije: list[str] = Field(default_factory=list)
     tipovi: list[str] = Field(
-        default_factory=lambda: ["praksa", "projekat", "radionica", "takmičenje"]
+        default_factory=lambda: [
+            "praksa",
+            "projekat",
+            "radionica",
+            "takmičenje",
+            "konferencija",
+            "meetup",
+            "posao",
+        ]
     )
     nivo: str = ""
     jezici: list[str] = Field(default_factory=list)
