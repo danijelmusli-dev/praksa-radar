@@ -8,13 +8,15 @@ import base64
 import re
 from datetime import datetime
 from email.utils import parseaddr
+from urllib.parse import parse_qs, urlsplit
 
 import httpx
 from bs4 import BeautifulSoup
 
-from radar.http import request_with_retry
+from radar.http import PoliteClient, RobotsDisallowed, request_with_retry
 from radar.models import RawItem, canonical_url
 from radar.sources.base import Source
+from radar.web import UrlRejected, clean_html, fetch_following, validate_fetch_url
 
 API = "https://gmail.googleapis.com/gmail/v1/users/me"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
@@ -92,7 +94,25 @@ def parse_message(message: dict, source: str) -> list[RawItem]:
     html = _find_body(message["payload"], "text/html")
     plain = _find_body(message["payload"], "text/plain")
 
-    if "linkedin.com" in sender.lower() and html:
+    address = parseaddr(sender)[1].lower()
+    if address == "googlealerts-noreply@google.com" and html:
+        results = {}
+        for anchor in BeautifulSoup(html, "lxml").select("a[href]"):
+            link = urlsplit(anchor["href"])
+            if link.hostname not in {"google.com", "www.google.com"} or link.path != "/url":
+                continue
+            params = parse_qs(link.query)
+            target = (params.get("url") or params.get("q") or [""])[0]
+            if not target.startswith(("https://", "http://")):
+                continue
+            title = anchor.get_text(" ", strip=True)
+            if not title:
+                continue
+            url = canonical_url(target)
+            card = anchor.find_parent("td") or anchor.parent
+            results[url] = RawItem("google-alerts", url, title, card.get_text(" ", strip=True))
+        return list(results.values())
+    if address.endswith("@linkedin.com") and html:
         jobs = parse_linkedin_alert(html, source)
         if jobs:
             return jobs
@@ -123,8 +143,10 @@ class GmailLabelSource(Source):
         refresh_token: str,
         label: str = "radar",
         http: httpx.Client | None = None,
+        publisher_client: PoliteClient | None = None,
     ):
         self._creds = (client_id, client_secret, refresh_token)
+        self._publisher = publisher_client
         self._label = label
         self._http = http or httpx.Client(timeout=20)
 
@@ -170,5 +192,19 @@ class GmailLabelSource(Source):
         items: list[RawItem] = []
         for mid in ids:
             message = self._get(f"messages/{mid}", token, format="full")
-            items += parse_message(message, self.name)
+            for item in parse_message(message, self.name):
+                if item.source == "google-alerts" and self._publisher:
+                    try:
+                        url, page = fetch_following(
+                            self._publisher,
+                            item.url,
+                            lambda u, seed=item.url: validate_fetch_url(u, {seed}),
+                        )
+                    except (UrlRejected, httpx.HTTPStatusError, RobotsDisallowed):
+                        continue
+                    if "html" not in page.headers.get("content-type", ""):
+                        continue
+                    item.url = canonical_url(url)
+                    item.text = clean_html(page.text, MAX_TEXT)
+                items.append(item)
         return items

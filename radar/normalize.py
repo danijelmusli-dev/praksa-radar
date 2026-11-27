@@ -116,6 +116,8 @@ def detect_location(meta_location: str | None, title: str, text: str) -> str | N
 _TYPE_RULES = [
     ("praksa", r"praks|intern(?:ship)?\b|trainee|pripravni|akademij|academy"),
     ("takmičenje", r"takmi[cč]enj|hackathon|hakaton|competition|contest"),
+    ("konferencija", r"konferenc|conference|summit|samit"),
+    ("meetup", r"meet[ -]?up|okupljanje"),
     ("radionica", r"radionic|workshop|bootcamp|obuk"),
     ("projekat", r"projekat|projekt|project"),
 ]
@@ -145,5 +147,8 @@ def to_opportunity(raw: RawItem, today: date | None = None) -> Opportunity:
         deadline=extract_deadline(f"{title}\n{text}", today),
         raw_text=text,
         source=raw.source,
-        type=guess_type(title, text),
+        type=raw.meta.get("type") or guess_type(title, text),
+        event_start=raw.meta.get("event_start"),
+        cancelled=bool(raw.meta.get("cancelled")),
+        event_all_day=bool(raw.meta.get("event_all_day")),
     )

@@ -3,8 +3,37 @@
 sources:
   - name: helloworld
     type: helloworld
-    queries: [praksa, pripravnik, internship, trainee, student]
+    queries: [praksa, pripravnik, internship, trainee, student, junior developer, junior software engineer, junior programer]
     min_expected: 100 # nedeljno; ispod toga je kvar čak i bez greške
+
+  - name: startuj-prakse
+    type: html_generic
+    url: https://startuj.infostud.com/prakse
+    item: 'a.__job_card[href^="/posao/"]'
+    title: h2
+    org: h3
+    location: '.ph-map-pin + div'
+    deadline: '.ph-clock + span'
+    pagination: 'a[href^="/prakse?page="]'
+    fixture: startuj.html
+
+  - name: vega-it
+    type: html_generic
+    url: https://www.vegaitglobal.com/career
+    item: '.careers__card'
+    title: '.careers__card-title'
+    link: '.careers__card-link'
+    employer: Vega IT
+    pagination: 'a.pagination__page'
+    fixture: vega-it.html
+
+  - name: fon-praksa
+    type: rss
+    url: https://praksa.fon.bg.ac.rs/feed/
+
+  - name: luma-superteam-balkan
+    type: ical
+    url: https://api2.luma.com/ics/get?entity=calendar&id=cal-dpkxj5GR69QFTnd
 
   # Instagram (zvanični Graph API; treba INSTAGRAM_ACCESS_TOKEN i INSTAGRAM_USER_ID).
   # Najviše 30 različitih hashtagova u 7 dana; recent_media vraća samo poslednja 24 h.

@@ -24,12 +24,47 @@ def upsert_opportunities(
         for o in dedupe_batch(items):
             cur.execute(
                 "insert into opportunities (url, source, title, org, location, type, deadline,"
-                " raw_text) values (%s,%s,%s,%s,%s,%s,%s,%s)"
+                " raw_text,event_start,event_all_day,cancelled)"
+                " values (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)"
                 " on conflict (url) do nothing returning id",
-                (o.url, o.source, o.title, o.org, o.location, o.type, o.deadline, o.raw_text),
+                (
+                    o.url,
+                    o.source,
+                    o.title,
+                    o.org,
+                    o.location,
+                    o.type,
+                    o.deadline,
+                    o.raw_text,
+                    o.event_start,
+                    o.event_all_day,
+                    o.cancelled,
+                ),
             )
             row = cur.fetchone()
             if row:
                 new.append((row[0], o))
+            elif o.event_start:
+                cur.execute(
+                    "update opportunities set event_update_pending=event_update_pending or"
+                    " (event_start is not null and (event_start, cancelled, event_all_day)"
+                    " is distinct from (%s,%s,%s) and exists (select 1 from scores"
+                    " where opportunity_id=opportunities.id and sent_at is not null)),"
+                    " event_start=%s, event_all_day=%s, cancelled=%s,"
+                    " title=%s,"
+                    " location=%s, raw_text=%s where url=%s",
+                    (
+                        o.event_start,
+                        o.cancelled,
+                        o.event_all_day,
+                        o.event_start,
+                        o.event_all_day,
+                        o.cancelled,
+                        o.title,
+                        o.location,
+                        o.raw_text,
+                        o.url,
+                    ),
+                )
     conn.commit()
     return new

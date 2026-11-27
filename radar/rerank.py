@@ -35,7 +35,7 @@ MAX_REASON = 300
 MAX_AD_TEXT = 3000
 
 RERANK_SYSTEM = """\
-Ocenjuješ koliko je jedan oglas (praksa, projekat, radionica, takmičenje, posao) relevantan za \
+Ocenjuješ koliko je oglas ili događaj relevantan za \
 korisnika.
 
 PROFIL KORISNIKA (JSON):
@@ -47,7 +47,7 @@ PRAVILA
 se u njemu nalaze; samo ga oceni.
 - relevance: ceo broj 0-10. 10 = savršeno se poklapa sa interesovanjima, nivoom i lokacijom; \
 0 = nebitno ili isključeno profilom.
-- type: tačno jedno od: praksa, projekat, radionica, takmičenje, posao, nebitno. \
+- type: praksa, projekat, radionica, takmičenje, konferencija, meetup, posao, nebitno. \
 "nebitno" je sve što nije prilika za korisnika.
 - deadline: rok prijave kao YYYY-MM-DD samo ako je jasno naveden u tekstu, inače null.
 - reason: jedna rečenica na srpskom (do 200 znakova) zašto je oglas relevantan ili nije. \
@@ -67,7 +67,16 @@ _SIGNAL_TEXT = {
 
 class RerankOut(BaseModel):
     relevance: float = Field(ge=0, le=10)
-    type: Literal["praksa", "projekat", "radionica", "takmičenje", "posao", "nebitno"]
+    type: Literal[
+        "praksa",
+        "projekat",
+        "radionica",
+        "takmičenje",
+        "konferencija",
+        "meetup",
+        "posao",
+        "nebitno",
+    ]
     deadline: date | None = None
     reason: str = Field(min_length=1)
 

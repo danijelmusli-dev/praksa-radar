@@ -20,6 +20,8 @@ GROUPS = [
     ("projekat", "PROJEKTI"),
     ("radionica", "RADIONICE"),
     ("takmičenje", "TAKMIČENJA"),
+    ("konferencija", "KONFERENCIJE"),
+    ("meetup", "MEETUP"),
     ("posao", "POSAO"),
 ]
 
@@ -57,6 +59,8 @@ class DigestItem:
     type: str | None
     reason: str
     url: str
+    event_start: datetime | None = None
+    event_all_day: bool = False
 
 
 @dataclass
@@ -97,6 +101,9 @@ def format_item(item: DigestItem, n: int) -> str:
     if item.org:
         head += f" — {item.org}"
     extra = [item.location, f"rok {item.deadline:%d.%m.}" if item.deadline else None]
+    if item.event_start:
+        fmt = "%d.%m." if item.event_all_day else "%d.%m. %H:%M %Z"
+        extra.append("događaj " + item.event_start.astimezone(TZ).strftime(fmt))
     extra = [e for e in extra if e]
     if extra:
         head += " · " + " · ".join(extra)
